@@ -353,6 +353,44 @@ async def thongke(interaction: discord.Interaction):
     )
 
 
+@bot.tree.command(name="huongdan", description="Đăng hướng dẫn sử dụng bot vào kênh này")
+async def huongdan(interaction: discord.Interaction):
+    guide = (
+        "## 💧 Hướng dẫn dùng Stay Hydrated Bot\n\n"
+        "**Bước 1 - Đăng ký (bắt buộc trước tiên):**\n"
+        "`/dangky` — đăng ký nhận nhắc nhở uống nước theo lịch cố định trong ngày.\n\n"
+        "**Các lệnh chính:**\n"
+        "• `/uong` — ghi nhận thủ công 1 lần đã uống nước (không cần đợi bot nhắc)\n"
+        "• `/homnay` — xem số lần đã uống nước hôm nay + streak hiện tại\n"
+        "• `/streak` — xem chuỗi ngày uống nước liên tục\n"
+        "• `/thongke` — xem biểu đồ 7 ngày gần nhất\n"
+        "• `/xuatdata` — xuất toàn bộ lịch sử ra file CSV (mở bằng Excel)\n"
+        "• `/huy` — ngừng nhận nhắc nhở (lịch sử vẫn được giữ, đăng ký lại bất cứ lúc nào)\n\n"
+        "**Khi bot nhắc nhở:** sẽ có 2 nút **✅ Đã uống** / **⏳ Chưa uống** ngay dưới tin nhắn, bấm trực tiếp là được, không cần gõ lệnh.\n\n"
+        "**Nếu quên bấm nút:** bot sẽ tự nhắc lại sau 1 khoảng thời gian nếu thấy bạn vẫn chưa uống thêm lần nào 💧"
+    )
+    await interaction.response.send_message(guide)
+
+
+@bot.tree.command(name="thongbao", description="[Admin] Đăng thông báo cập nhật mới của bot vào kênh này")
+@app_commands.describe(noi_dung="Nội dung cập nhật muốn thông báo")
+async def thongbao(interaction: discord.Interaction, noi_dung: str):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message(
+            "Lệnh này chỉ dành cho admin server thôi nha 😅", ephemeral=True
+        )
+        return
+
+    active_users = db.get_active_users()
+    mentions = " ".join(f"<@{uid}>" for uid, _ in active_users) if active_users else ""
+
+    text = f"## 📢 Cập nhật mới\n\n{noi_dung}"
+    if mentions:
+        text += f"\n\n{mentions}"
+
+    await interaction.response.send_message(text)
+
+
 # ---------- Chạy bot ----------
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
