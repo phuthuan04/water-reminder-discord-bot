@@ -252,3 +252,4 @@ async def thongke(interaction: discord.Interaction):
 # ---------- Chạy bot ----------
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+# 123

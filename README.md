@@ -79,3 +79,5 @@ Mình có thể hướng dẫn chi tiết bước deploy khi bạn code chạy �
 - **Lỗi "Improper token"**: token trong `.env` bị sai hoặc dính khoảng trắng thừa
 - **Slash command không hiện trong Discord**: đợi vài phút để Discord đồng bộ, hoặc thử `Ctrl+R` reload Discord
 - **Bot online nhưng không gửi tin nhắn nhắc nhở đúng giờ**: kiểm tra lại `TIMEZONE` và `REMINDER_TIMES` trong `.env`, đảm bảo giờ hệ thống server đúng
+
+Loading(test)
