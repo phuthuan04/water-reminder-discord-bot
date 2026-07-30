@@ -11,6 +11,7 @@ Chạy: python bot.py
 
 import os
 import io
+import csv
 import random
 import logging
 from datetime import datetime, timedelta
@@ -261,6 +262,40 @@ async def streak(interaction: discord.Interaction):
 async def test_reminder(interaction: discord.Interaction):
     await interaction.response.send_message("Đang gửi thử tin nhắn nhắc nhở... ⏳", ephemeral=True)
     await send_water_reminder()
+
+
+
+@bot.tree.command(name="xuatdata", description="Xuất toàn bộ dữ liệu thô ra file CSV")
+async def xuatdata(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+ 
+    # --- File 1: water_logs.csv ---
+    logs = db.get_all_water_logs()
+    logs_buffer = io.StringIO()
+    writer = csv.writer(logs_buffer)
+    writer.writerow(["user_id", "display_name", "timestamp_utc"])
+    for user_id, display_name, timestamp in logs:
+        writer.writerow([user_id, display_name or "", timestamp.isoformat()])
+    logs_bytes = io.BytesIO(logs_buffer.getvalue().encode("utf-8-sig"))  # utf-8-sig để Excel đọc đúng tiếng Việt
+ 
+    # --- File 2: users.csv ---
+    users = db.get_all_users_raw()
+    users_buffer = io.StringIO()
+    writer = csv.writer(users_buffer)
+    writer.writerow(["user_id", "display_name", "is_active"])
+    for user_id, display_name, is_active in users:
+        writer.writerow([user_id, display_name or "", is_active])
+    users_bytes = io.BytesIO(users_buffer.getvalue().encode("utf-8-sig"))
+ 
+    await interaction.followup.send(
+        content=f"📦 Đã xuất dữ liệu: **{len(logs)} lượt uống nước**, **{len(users)} người dùng**.",
+        files=[
+            discord.File(logs_bytes, filename="water_logs.csv"),
+            discord.File(users_bytes, filename="users.csv"),
+        ],
+        ephemeral=True,
+    )
+
 
 
 @bot.tree.command(name="thongke", description="Xem biểu đồ uống nước 7 ngày gần nhất")

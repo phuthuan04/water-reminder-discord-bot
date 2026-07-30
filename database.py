@@ -226,3 +226,31 @@ def log_mood_checkin(user_id: str, note: str = None):
         session.commit()
     finally:
         session.close()
+
+
+# ---------- Xuất dữ liệu thô (dùng cho lệnh /xuatdata) ----------
+ 
+def get_all_water_logs() -> list:
+    """Trả về toàn bộ lịch sử uống nước, mới nhất trước: [(user_id, display_name, timestamp), ...]"""
+    session = SessionLocal()
+    try:
+        rows = (
+            session.query(WaterLog, User.display_name)
+            .outerjoin(User, User.id == WaterLog.user_id)
+            .order_by(WaterLog.timestamp.desc())
+            .all()
+        )
+        return [(log.user_id, name, log.timestamp) for log, name in rows]
+    finally:
+        session.close()
+ 
+ 
+def get_all_users_raw() -> list:
+    """Trả về toàn bộ danh sách người dùng: [(user_id, display_name, is_active), ...]"""
+    session = SessionLocal()
+    try:
+        users = session.query(User).all()
+        return [(u.id, u.display_name, u.is_active) for u in users]
+    finally:
+        session.close()
+ 
