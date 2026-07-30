@@ -1,0 +1,254 @@
+"""
+bot.py
+File chính - khởi tạo bot Discord, xử lý reminder theo lịch,
+nút bấm "Đã uống / Chưa uống", và slash command xem thống kê.
+
+Mô hình multi-user: mỗi người tự gõ /dangky để nhận nhắc nhở,
+phù hợp khi có nhiều người cùng dùng chung 1 bot (VD: bạn + người yêu).
+
+Chạy: python bot.py
+"""
+
+import os
+import io
+import random
+import logging
+from datetime import datetime
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+from dotenv import load_dotenv
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+import matplotlib
+matplotlib.use("Agg")  # không cần giao diện đồ họa, chỉ xuất ảnh
+import matplotlib.pyplot as plt
+
+import database as db
+import messages as msg
+
+# ---------- Cấu hình & logging ----------
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+log = logging.getLogger("water-bot")
+
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
+TIMEZONE = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh")
+REMINDER_TIMES = [t.strip() for t in os.getenv("REMINDER_TIMES", "08:00,12:00,15:00,20:00").split(",")]
+
+if not DISCORD_TOKEN:
+    raise RuntimeError("Chưa cấu hình DISCORD_TOKEN trong file .env")
+
+# ---------- Khởi tạo bot ----------
+intents = discord.Intents.default()
+intents.message_content = False  # không cần đọc nội dung tin nhắn, chỉ dùng slash command + button
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+scheduler = AsyncIOScheduler(timezone=TIMEZONE)
+
+
+# ---------- Giao diện nút bấm (View) ----------
+class WaterReminderView(discord.ui.View):
+    """
+    View chứa 2 nút: Đã uống / Chưa uống.
+    timeout=None để nút không bao giờ hết hạn (Discord giới hạn 15 phút nếu không set None).
+
+    Lưu ý: 1 tin nhắn nhắc nhở có thể gửi cho NHIỀU người đăng ký cùng lúc
+    (VD: cả bạn và người yêu cùng dùng chung kênh). Ai bấm nút thì log cho
+    chính người đó, không giới hạn chỉ 1 người cố định.
+    """
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    async def _check_registered(self, interaction: discord.Interaction) -> bool:
+        """Chỉ người đã /dangky mới được log qua nút bấm."""
+        if not db.is_user_registered(interaction.user.id):
+            await interaction.response.send_message(
+                "Bạn chưa đăng ký nhận nhắc nhở nha, gõ lệnh `/dangky` trước đã 😉",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="✅ Đã uống", style=discord.ButtonStyle.success, custom_id="water_done")
+    async def done_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check_registered(interaction):
+            return
+
+        db.log_water(interaction.user.id)
+        today_count = db.get_today_count(interaction.user.id)
+
+        # Trả lời riêng (ephemeral) cho người bấm, không disable nút chung
+        # vì tin nhắn này có thể còn người khác chưa bấm.
+        await interaction.response.send_message(
+            f"{msg.get_random_praise()}\n"
+            f"📊 Hôm nay bạn đã uống nước **{today_count} lần** rồi đó!",
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="⏳ Chưa uống", style=discord.ButtonStyle.secondary, custom_id="water_not_yet")
+    async def not_yet_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check_registered(interaction):
+            return
+
+        await interaction.response.send_message(msg.get_random_nudge(), ephemeral=True)
+
+
+# ---------- Logic gửi nhắc nhở ----------
+async def send_water_reminder():
+    """Được scheduler gọi theo giờ đã cấu hình."""
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel is None:
+        log.error("Không tìm thấy channel ID %s - kiểm tra lại .env", CHANNEL_ID)
+        return
+
+    active_users = db.get_active_users()
+    if not active_users:
+        log.info("Chưa có ai đăng ký (/dangky) - bỏ qua lượt nhắc này")
+        return
+
+    mentions = " ".join(f"<@{user_id}>" for user_id, _ in active_users)
+    text = f"{mentions} {msg.get_random_reminder()}"
+
+    # 30% khả năng kèm thêm câu hỏi thăm sức khỏe cho đỡ nhàm
+    if random.random() < 0.3:
+        text += f"\n\n{msg.get_random_health_checkin()}"
+
+    view = WaterReminderView()
+    await channel.send(text, view=view)
+    log.info("Đã gửi nhắc nhở lúc %s cho %d người", datetime.now().strftime("%H:%M:%S"), len(active_users))
+
+
+def setup_scheduler():
+    """Đăng ký các job nhắc nhở theo REMINDER_TIMES trong .env"""
+    for time_str in REMINDER_TIMES:
+        try:
+            hour, minute = map(int, time_str.split(":"))
+        except ValueError:
+            log.warning("Bỏ qua giờ nhắc không hợp lệ: %s", time_str)
+            continue
+
+        scheduler.add_job(
+            send_water_reminder,
+            trigger=CronTrigger(hour=hour, minute=minute),
+            id=f"reminder_{time_str}",
+            replace_existing=True,
+        )
+        log.info("Đã đăng ký nhắc nhở lúc %s hằng ngày", time_str)
+
+
+# ---------- Sự kiện bot ----------
+@bot.event
+async def on_ready():
+    db.init_db()
+
+    # Đăng ký lại view "vĩnh viễn" để nút vẫn hoạt động sau khi bot restart
+    bot.add_view(WaterReminderView())
+
+    if not scheduler.running:
+        setup_scheduler()
+        scheduler.start()
+
+    try:
+        synced = await bot.tree.sync()
+        log.info("Đã đồng bộ %d slash command(s)", len(synced))
+    except Exception as e:
+        log.error("Lỗi khi đồng bộ slash command: %s", e)
+
+    log.info("Bot đã sẵn sàng: %s", bot.user)
+
+
+# ---------- Slash Commands ----------
+@bot.tree.command(name="dangky", description="Đăng ký nhận nhắc nhở uống nước từ bot")
+async def dangky(interaction: discord.Interaction):
+    is_new = db.register_user(interaction.user.id, interaction.user.display_name)
+    if is_new:
+        await interaction.response.send_message(
+            "🎉 Đăng ký thành công! Từ giờ bạn sẽ được nhắc uống nước theo lịch nha.\n"
+            "Muốn ngừng nhận thì gõ `/huy`."
+        )
+    else:
+        await interaction.response.send_message("Bạn đã đăng ký từ trước rồi nha 😉")
+
+
+@bot.tree.command(name="huy", description="Ngừng nhận nhắc nhở uống nước")
+async def huy(interaction: discord.Interaction):
+    db.unregister_user(interaction.user.id)
+    await interaction.response.send_message(
+        "Đã ngừng nhắc nhở. Lịch sử uống nước của bạn vẫn được lưu, "
+        "muốn nhận lại thì gõ `/dangky` bất cứ lúc nào nha."
+    )
+
+
+@bot.tree.command(name="uong", description="Ghi nhận thủ công 1 lần đã uống nước")
+async def uong(interaction: discord.Interaction):
+    db.log_water(interaction.user.id)
+    today_count = db.get_today_count(interaction.user.id)
+    await interaction.response.send_message(
+        f"{msg.get_random_praise()}\n📊 Hôm nay đã uống nước **{today_count} lần**."
+    )
+
+
+@bot.tree.command(name="homnay", description="Xem số lần đã uống nước hôm nay")
+async def homnay(interaction: discord.Interaction):
+    today_count = db.get_today_count(interaction.user.id)
+    await interaction.response.send_message(f"📊 Hôm nay bạn đã uống nước **{today_count} lần** rồi!")
+
+
+@bot.tree.command(name="test", description="[Test] Gửi thử tin nhắn nhắc nhở ngay lập tức, không cần đợi tới giờ")
+async def test_reminder(interaction: discord.Interaction):
+    await interaction.response.send_message("Đang gửi thử tin nhắn nhắc nhở... ⏳", ephemeral=True)
+    await send_water_reminder()
+
+
+@bot.tree.command(name="thongke", description="Xem biểu đồ uống nước 7 ngày gần nhất")
+async def thongke(interaction: discord.Interaction):
+    await interaction.response.defer()  # vẽ biểu đồ có thể mất >3s, cần defer trước
+
+    stats = db.get_last_n_days_stats(interaction.user.id, n_days=7)
+    days = list(stats.keys())
+    counts = list(stats.values())
+
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    bars = ax.bar(days, counts, color="#4FC3F7")
+    ax.set_title("Số lần uống nước - 7 ngày gần nhất", fontsize=14, fontweight="bold")
+    ax.set_ylabel("Số lần")
+    ax.set_ylim(bottom=0)
+
+    # Ghi số lên đầu mỗi cột cho dễ đọc
+    for bar, count in zip(bars, counts):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.1,
+            str(count),
+            ha="center",
+            fontsize=10,
+        )
+
+    plt.tight_layout()
+
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format="png", dpi=120)
+    buffer.seek(0)
+    plt.close(fig)
+
+    file = discord.File(buffer, filename="thongke.png")
+    total = sum(counts)
+    avg = total / len(counts) if counts else 0
+
+    await interaction.followup.send(
+        content=f"📈 Trung bình **{avg:.1f} lần/ngày** trong 7 ngày qua.",
+        file=file,
+    )
+
+
+# ---------- Chạy bot ----------
+if __name__ == "__main__":
+    bot.run(DISCORD_TOKEN)

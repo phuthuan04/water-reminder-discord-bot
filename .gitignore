@@ -1,0 +1,6 @@
+# Không đẩy các file này lên GitHub
+.env
+venv/
+__pycache__/
+*.pyc
+water_reminder.db
