@@ -12,6 +12,7 @@ Chạy: python bot.py
 import os
 import io
 import csv
+import time
 import random
 import logging
 from datetime import datetime, timedelta
@@ -36,6 +37,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
+
+# Ép logging dùng giờ Việt Nam (UTC+7) thay vì giờ hệ thống server,
+# vì time.localtime() mặc định phụ thuộc múi giờ OS của server (Railway).
+logging.Formatter.converter = lambda *args: time.gmtime(time.time() + 7 * 3600)
 log = logging.getLogger("water-bot")
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -53,6 +58,16 @@ intents.message_content = False  # không cần đọc nội dung tin nhắn, ch
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 scheduler = AsyncIOScheduler(timezone=TIMEZONE)
+
+
+def vn_now() -> datetime:
+    """
+    Giờ hiện tại theo giờ Việt Nam, tính từ datetime.utcnow() + 7 giờ.
+    Không dùng datetime.now() vì nó phụ thuộc múi giờ hệ điều hành của server
+    (Railway có thể chạy ở UTC hoặc múi giờ khác), trong khi datetime.utcnow()
+    luôn cho giờ UTC chuẩn bất kể server đặt ở đâu.
+    """
+    return datetime.utcnow() + timedelta(hours=7)
 
 
 # ---------- Giao diện nút bấm (View) ----------
@@ -127,7 +142,7 @@ async def send_water_reminder():
 
     view = WaterReminderView()
     await channel.send(text, view=view)
-    log.info("Đã gửi nhắc nhở lúc %s cho %d người", datetime.now().strftime("%H:%M:%S"), len(active_users))
+    log.info("Đã gửi nhắc nhở lúc %s cho %d người", vn_now().strftime("%H:%M:%S"), len(active_users))
 
     # Ghi lại số lần uống nước hiện tại của từng người (baseline),
     # để lát nữa so sánh xem có ai chưa uống thêm lần nào không.
@@ -137,7 +152,7 @@ async def send_water_reminder():
     scheduler.add_job(
         check_and_followup,
         trigger="date",
-        run_date=datetime.now() + timedelta(minutes=FOLLOWUP_MINUTES),
+        run_date=vn_now() + timedelta(minutes=FOLLOWUP_MINUTES),
         args=[user_ids, baseline],
         misfire_grace_time=300,
     )
@@ -264,20 +279,20 @@ async def test_reminder(interaction: discord.Interaction):
     await send_water_reminder()
 
 
-
 @bot.tree.command(name="xuatdata", description="Xuất toàn bộ dữ liệu thô ra file CSV")
 async def xuatdata(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
- 
+
     # --- File 1: water_logs.csv ---
     logs = db.get_all_water_logs()
     logs_buffer = io.StringIO()
     writer = csv.writer(logs_buffer)
-    writer.writerow(["user_id", "display_name", "timestamp_utc"])
+    writer.writerow(["user_id", "display_name", "timestamp_vn"])
     for user_id, display_name, timestamp in logs:
-        writer.writerow([user_id, display_name or "", timestamp.isoformat()])
+        vn_timestamp = timestamp + timedelta(hours=7)
+        writer.writerow([user_id, display_name or "", vn_timestamp.isoformat()])
     logs_bytes = io.BytesIO(logs_buffer.getvalue().encode("utf-8-sig"))  # utf-8-sig để Excel đọc đúng tiếng Việt
- 
+
     # --- File 2: users.csv ---
     users = db.get_all_users_raw()
     users_buffer = io.StringIO()
@@ -286,7 +301,7 @@ async def xuatdata(interaction: discord.Interaction):
     for user_id, display_name, is_active in users:
         writer.writerow([user_id, display_name or "", is_active])
     users_bytes = io.BytesIO(users_buffer.getvalue().encode("utf-8-sig"))
- 
+
     await interaction.followup.send(
         content=f"📦 Đã xuất dữ liệu: **{len(logs)} lượt uống nước**, **{len(users)} người dùng**.",
         files=[
@@ -295,7 +310,6 @@ async def xuatdata(interaction: discord.Interaction):
         ],
         ephemeral=True,
     )
-
 
 
 @bot.tree.command(name="thongke", description="Xem biểu đồ uống nước 7 ngày gần nhất")

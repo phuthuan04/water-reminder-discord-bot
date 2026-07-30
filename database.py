@@ -54,6 +54,21 @@ def init_db():
     Base.metadata.create_all(engine)
 
 
+def _vn_now() -> datetime:
+    """
+    Giờ hiện tại theo giờ Việt Nam (UTC+7), tính từ datetime.utcnow().
+    Dùng cách này thay vì datetime.now() vì datetime.now() phụ thuộc múi giờ
+    hệ điều hành của server (VD Railway có thể chạy ở UTC hoặc múi giờ khác),
+    trong khi datetime.utcnow() luôn cho giờ UTC chuẩn bất kể server ở đâu.
+    """
+    return datetime.utcnow() + timedelta(hours=7)
+
+
+def _vn_today() -> date:
+    """Ngày hiện tại theo giờ Việt Nam, không phụ thuộc múi giờ server."""
+    return _vn_now().date()
+
+
 # ---------- Quản lý đăng ký người dùng ----------
 
 def register_user(user_id: str, display_name: str = None) -> bool:
@@ -132,7 +147,9 @@ def get_today_count(user_id: str) -> int:
     """Đếm số lần đã uống nước trong ngày hôm nay (theo giờ UTC)."""
     session = SessionLocal()
     try:
-        today_start = datetime.combine(date.today(), datetime.min.time())
+        # Nửa đêm giờ VN = 17:00 UTC ngày hôm trước, cần quy đổi để so sánh đúng
+        # với timestamp lưu trong DB (vốn lưu dạng UTC qua datetime.utcnow())
+        today_start = datetime.combine(_vn_today(), datetime.min.time()) - timedelta(hours=7)
         count = (
             session.query(func.count(WaterLog.id))
             .filter(WaterLog.user_id == str(user_id))
@@ -150,8 +167,8 @@ def get_last_n_days_stats(user_id: str, n_days: int = 7) -> dict:
     """
     session = SessionLocal()
     try:
-        start_date = date.today() - timedelta(days=n_days - 1)
-        start_datetime = datetime.combine(start_date, datetime.min.time())
+        start_date = _vn_today() - timedelta(days=n_days - 1)
+        start_datetime = datetime.combine(start_date, datetime.min.time()) - timedelta(hours=7)
 
         logs = (
             session.query(WaterLog)
@@ -167,7 +184,11 @@ def get_last_n_days_stats(user_id: str, n_days: int = 7) -> dict:
         }
 
         for log_entry in logs:
-            key = log_entry.timestamp.strftime("%d/%m")
+            # Quy đổi timestamp (UTC) về giờ VN trước khi lấy ngày, để không bị lệch
+            # vào khung giờ tối muộn (VD 23h VN = 16h UTC cùng ngày, không lệch,
+            # nhưng qua nửa đêm VN 0h-6h59 lại là ngày hôm trước theo giờ UTC).
+            vn_time = log_entry.timestamp + timedelta(hours=7)
+            key = vn_time.strftime("%d/%m")
             if key in stats:
                 stats[key] += 1
 
@@ -187,12 +208,12 @@ def get_streak(user_id: str) -> int:
     session = SessionLocal()
     try:
         rows = session.query(WaterLog.timestamp).filter(WaterLog.user_id == str(user_id)).all()
-        logged_dates = sorted({r.timestamp.date() for r in rows}, reverse=True)
+        logged_dates = sorted({(r.timestamp + timedelta(hours=7)).date() for r in rows}, reverse=True)
 
         if not logged_dates:
             return 0
 
-        today = date.today()
+        today = _vn_today()
 
         if logged_dates[0] == today:
             streak = 1
@@ -229,7 +250,7 @@ def log_mood_checkin(user_id: str, note: str = None):
 
 
 # ---------- Xuất dữ liệu thô (dùng cho lệnh /xuatdata) ----------
- 
+
 def get_all_water_logs() -> list:
     """Trả về toàn bộ lịch sử uống nước, mới nhất trước: [(user_id, display_name, timestamp), ...]"""
     session = SessionLocal()
@@ -243,8 +264,8 @@ def get_all_water_logs() -> list:
         return [(log.user_id, name, log.timestamp) for log, name in rows]
     finally:
         session.close()
- 
- 
+
+
 def get_all_users_raw() -> list:
     """Trả về toàn bộ danh sách người dùng: [(user_id, display_name, is_active), ...]"""
     session = SessionLocal()
@@ -253,4 +274,3 @@ def get_all_users_raw() -> list:
         return [(u.id, u.display_name, u.is_active) for u in users]
     finally:
         session.close()
- 
