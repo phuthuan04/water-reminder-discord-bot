@@ -178,6 +178,46 @@ def get_last_n_days_stats(user_id: str, n_days: int = 7) -> dict:
 
 # ---------- Hỏi thăm sức khỏe (mở rộng) ----------
 
+def get_streak(user_id: str) -> int:
+    """
+    Tính chuỗi ngày liên tục gần nhất có ít nhất 1 lần uống nước.
+    Nếu hôm nay chưa uống lần nào, vẫn tính streak từ hôm qua trở về trước
+    (không bị mất streak chỉ vì hôm nay chưa kịp uống).
+    """
+    session = SessionLocal()
+    try:
+        rows = session.query(WaterLog.timestamp).filter(WaterLog.user_id == str(user_id)).all()
+        logged_dates = sorted({r.timestamp.date() for r in rows}, reverse=True)
+
+        if not logged_dates:
+            return 0
+
+        today = date.today()
+
+        if logged_dates[0] == today:
+            streak = 1
+            expected = today - timedelta(days=1)
+            remaining = logged_dates[1:]
+        elif logged_dates[0] == today - timedelta(days=1):
+            streak = 1
+            expected = today - timedelta(days=2)
+            remaining = logged_dates[1:]
+        else:
+            # Lần uống gần nhất đã cách đây hơn 1 ngày -> streak bị đứt
+            return 0
+
+        for d in remaining:
+            if d == expected:
+                streak += 1
+                expected -= timedelta(days=1)
+            else:
+                break
+
+        return streak
+    finally:
+        session.close()
+
+
 def log_mood_checkin(user_id: str, note: str = None):
     session = SessionLocal()
     try:

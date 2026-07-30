@@ -40,6 +40,14 @@ NUDGE_MESSAGES = [
     "Được rồi, nhưng đừng trì hoãn lâu quá nha 🥺",
 ]
 
+# Tin nhắn nhắc LẠI khi sau 1 khoảng thời gian vẫn chưa thấy uống nước
+FOLLOWUP_MESSAGES = [
+    "Nãy nhắc rồi mà vẫn chưa thấy uống nước nè, tranh thủ đi nha 🥺",
+    "Ê, nước đang đợi bạn đó! Đừng để quên luôn nha 💧",
+    "Nhắc lại nè, uống 1 ly nước rồi quay lại làm việc tiếp nha 😌",
+    "Chưa uống nước thiệt hả? Đi uống ngay đi nha, mình đợi 🙏",
+]
+
 
 def get_random_reminder() -> str:
     return random.choice(REMINDER_MESSAGES)
@@ -55,3 +63,7 @@ def get_random_praise() -> str:
 
 def get_random_nudge() -> str:
     return random.choice(NUDGE_MESSAGES)
+
+
+def get_random_followup() -> str:
+    return random.choice(FOLLOWUP_MESSAGES)

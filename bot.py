@@ -13,7 +13,7 @@ import os
 import io
 import random
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import discord
 from discord import app_commands
@@ -41,6 +41,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh")
 REMINDER_TIMES = [t.strip() for t in os.getenv("REMINDER_TIMES", "08:00,12:00,15:00,20:00").split(",")]
+FOLLOWUP_MINUTES = int(os.getenv("REMINDER_FOLLOWUP_MINUTES", "30"))
 
 if not DISCORD_TOKEN:
     raise RuntimeError("Chưa cấu hình DISCORD_TOKEN trong file .env")
@@ -84,12 +85,14 @@ class WaterReminderView(discord.ui.View):
 
         db.log_water(interaction.user.id)
         today_count = db.get_today_count(interaction.user.id)
+        streak_count = db.get_streak(interaction.user.id)
 
         # Trả lời riêng (ephemeral) cho người bấm, không disable nút chung
         # vì tin nhắn này có thể còn người khác chưa bấm.
         await interaction.response.send_message(
             f"{msg.get_random_praise()}\n"
-            f"📊 Hôm nay bạn đã uống nước **{today_count} lần** rồi đó!",
+            f"📊 Hôm nay bạn đã uống nước **{today_count} lần** rồi đó!\n"
+            f"🔥 Streak: **{streak_count} ngày**",
             ephemeral=True,
         )
 
@@ -124,6 +127,41 @@ async def send_water_reminder():
     view = WaterReminderView()
     await channel.send(text, view=view)
     log.info("Đã gửi nhắc nhở lúc %s cho %d người", datetime.now().strftime("%H:%M:%S"), len(active_users))
+
+    # Ghi lại số lần uống nước hiện tại của từng người (baseline),
+    # để lát nữa so sánh xem có ai chưa uống thêm lần nào không.
+    baseline = {user_id: db.get_today_count(user_id) for user_id, _ in active_users}
+    user_ids = [user_id for user_id, _ in active_users]
+
+    scheduler.add_job(
+        check_and_followup,
+        trigger="date",
+        run_date=datetime.now() + timedelta(minutes=FOLLOWUP_MINUTES),
+        args=[user_ids, baseline],
+        misfire_grace_time=300,
+    )
+
+
+async def check_and_followup(user_ids: list, baseline: dict):
+    """
+    Chạy sau FOLLOWUP_MINUTES kể từ lúc gửi reminder.
+    Ai chưa uống thêm lần nào so với baseline sẽ được nhắc lại riêng.
+    """
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel is None:
+        return
+
+    still_not_done = [
+        uid for uid in user_ids
+        if db.get_today_count(uid) <= baseline.get(uid, 0)
+    ]
+
+    if not still_not_done:
+        return
+
+    mentions = " ".join(f"<@{uid}>" for uid in still_not_done)
+    await channel.send(f"{mentions} {msg.get_random_followup()}")
+    log.info("Đã nhắc lại cho %d người chưa uống nước", len(still_not_done))
 
 
 def setup_scheduler():
@@ -199,7 +237,24 @@ async def uong(interaction: discord.Interaction):
 @bot.tree.command(name="homnay", description="Xem số lần đã uống nước hôm nay")
 async def homnay(interaction: discord.Interaction):
     today_count = db.get_today_count(interaction.user.id)
-    await interaction.response.send_message(f"📊 Hôm nay bạn đã uống nước **{today_count} lần** rồi!")
+    streak = db.get_streak(interaction.user.id)
+    await interaction.response.send_message(
+        f"📊 Hôm nay bạn đã uống nước **{today_count} lần** rồi!\n"
+        f"🔥 Streak hiện tại: **{streak} ngày** liên tục"
+    )
+
+
+@bot.tree.command(name="streak", description="Xem chuỗi ngày uống nước liên tục của bạn")
+async def streak(interaction: discord.Interaction):
+    streak_count = db.get_streak(interaction.user.id)
+    if streak_count == 0:
+        await interaction.response.send_message(
+            "Chưa có streak nào cả, uống nước ngay hôm nay để bắt đầu chuỗi mới nha! 💧"
+        )
+    else:
+        await interaction.response.send_message(
+            f"🔥 Bạn đang giữ streak **{streak_count} ngày** liên tục uống nước! Cố lên nha!"
+        )
 
 
 @bot.tree.command(name="test", description="[Test] Gửi thử tin nhắn nhắc nhở ngay lập tức, không cần đợi tới giờ")
@@ -252,4 +307,3 @@ async def thongke(interaction: discord.Interaction):
 # ---------- Chạy bot ----------
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
-# 123

@@ -63,8 +63,13 @@ Nếu thấy log `Bot đã sẵn sàng: <tên bot>#xxxx` là thành công! Bot �
 | `/homnay` | Xem đã uống nước bao nhiêu lần trong hôm nay |
 | `/thongke` | Vẽ biểu đồ số lần uống nước 7 ngày gần nhất |
 | `/test` | Gửi thử tin nhắn nhắc nhở ngay lập tức, không cần đợi tới giờ |
+| `/streak` | Xem chuỗi ngày uống nước liên tục |
 
 Khi bot gửi tin nhắn nhắc nhở, sẽ có 2 nút **✅ Đã uống** / **⏳ Chưa uống** để bấm trực tiếp.
+
+**Tính năng nhắc lại**: nếu sau `REMINDER_FOLLOWUP_MINUTES` phút (mặc định 30) kể từ lúc bot nhắc, người dùng vẫn chưa uống thêm lần nào, bot sẽ tự động nhắc lại 1 lần nữa trong cùng kênh.
+
+**Tính năng streak**: chuỗi ngày uống nước liên tục sẽ tự động hiện kèm mỗi khi bạn bấm nút ✅ hoặc gõ `/homnay`. Streak không bị mất chỉ vì hôm nay chưa kịp uống - chỉ đứt khi bỏ lỡ nguyên 1 ngày trở lên.
 
 **Mô hình nhiều người dùng chung 1 bot**: bot này hỗ trợ nhiều người cùng đăng ký trong 1 kênh (VD: bạn dùng trước, sau này mời người yêu vào server, họ chỉ cần tự gõ `/dangky` là được nhắc nhở luôn — không cần sửa code hay `.env` gì cả).
 
@@ -79,5 +84,3 @@ Mình có thể hướng dẫn chi tiết bước deploy khi bạn code chạy �
 - **Lỗi "Improper token"**: token trong `.env` bị sai hoặc dính khoảng trắng thừa
 - **Slash command không hiện trong Discord**: đợi vài phút để Discord đồng bộ, hoặc thử `Ctrl+R` reload Discord
 - **Bot online nhưng không gửi tin nhắn nhắc nhở đúng giờ**: kiểm tra lại `TIMEZONE` và `REMINDER_TIMES` trong `.env`, đảm bảo giờ hệ thống server đúng
-
-Loading(test)
