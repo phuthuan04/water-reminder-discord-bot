@@ -49,6 +49,12 @@ TIMEZONE = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh")
 REMINDER_TIMES = [t.strip() for t in os.getenv("REMINDER_TIMES", "08:00,12:00,15:00,20:00").split(",")]
 FOLLOWUP_MINUTES = int(os.getenv("REMINDER_FOLLOWUP_MINUTES", "30"))
 
+# Danh sách Discord user ID được coi là admin (cách nhau bởi dấu phẩy).
+# Đây là cơ chế phân quyền RIÊNG của bot, không dùng quyền "Administrator" của Discord server,
+# nên 1 người có thể vừa là admin (theo bot) vừa dùng bot như user bình thường mà không xung đột,
+# và không ai khác nhìn thấy được ai là admin (không lộ qua vai trò/role Discord).
+ADMIN_USER_IDS = {uid.strip() for uid in os.getenv("ADMIN_USER_IDS", "").split(",") if uid.strip()}
+
 if not DISCORD_TOKEN:
     raise RuntimeError("Chưa cấu hình DISCORD_TOKEN trong file .env")
 
@@ -68,6 +74,11 @@ def vn_now() -> datetime:
     luôn cho giờ UTC chuẩn bất kể server đặt ở đâu.
     """
     return datetime.utcnow() + timedelta(hours=7)
+
+
+def is_admin(user_id) -> bool:
+    """Kiểm tra user có nằm trong danh sách admin của bot không (không liên quan quyền Discord)."""
+    return str(user_id) in ADMIN_USER_IDS
 
 
 # ---------- Giao diện nút bấm (View) ----------
@@ -375,9 +386,9 @@ async def huongdan(interaction: discord.Interaction):
 @bot.tree.command(name="thongbao", description="[Admin] Đăng thông báo cập nhật mới của bot vào kênh này")
 @app_commands.describe(noi_dung="Nội dung cập nhật muốn thông báo")
 async def thongbao(interaction: discord.Interaction, noi_dung: str):
-    if not interaction.user.guild_permissions.administrator:
+    if not is_admin(interaction.user.id):
         await interaction.response.send_message(
-            "Lệnh này chỉ dành cho admin server thôi nha 😅", ephemeral=True
+            "Lệnh này chỉ dành cho admin thôi nha 😉", ephemeral=True
         )
         return
 
