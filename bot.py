@@ -68,6 +68,14 @@ FACTS_TIMES = [t.strip() for t in os.getenv("FACTS_TIMES", "07:00,11:30,15:00,21
 # Nếu để trống, bot sẽ luôn dùng danh sách facts tĩnh trong messages.py thay vì gọi API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# Prompt dùng để yêu cầu Gemini sinh fact - có thể đổi trực tiếp trên Railway (tab Variables)
+# mà không cần sửa code/deploy lại.
+PROMPT_FACT = os.getenv("PROMPT_FACT") or (
+    "Viết đúng 1 câu fact ngắn gọn (dưới 40 từ), vui vẻ, bằng tiếng Việt, "
+    "về lợi ích hoặc điều thú vị/hài hước liên quan tới việc uống nước. "
+    "Có thể thêm 1 emoji phù hợp. Chỉ trả về đúng câu fact, không thêm lời dẫn hay giải thích gì khác."
+)
+
 # Danh sách Discord user ID được coi là admin (cách nhau bởi dấu phẩy).
 # Đây là cơ chế phân quyền RIÊNG của bot, không dùng quyền "Administrator" của Discord server,
 # nên 1 người có thể vừa là admin (theo bot) vừa dùng bot như user bình thường mà không xung đột,
@@ -323,11 +331,7 @@ async def generate_fact_via_gemini():
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = await client.aio.models.generate_content(
             model="gemini-3.5-flash",
-            contents=(
-                "Viết đúng 1 câu fact ngắn gọn (dưới 40 từ), vui vẻ, bằng tiếng Việt, "
-                "về lợi ích hoặc điều thú vị/hài hước liên quan tới việc uống nước. "
-                "Có thể thêm 1 emoji phù hợp. Chỉ trả về đúng câu fact, không thêm lời dẫn hay giải thích gì khác."
-            ),
+            contents=PROMPT_FACT,
         )
         text = (response.text or "").strip()
         return text if text else None
