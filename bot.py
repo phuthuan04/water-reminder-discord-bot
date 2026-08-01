@@ -62,6 +62,12 @@ DRINK_CONFIRM_MAX = int(os.getenv("DRINK_CONFIRM_MAX", "2"))
 _quiet_h, _quiet_m = map(int, os.getenv("QUIET_HOUR", "22:30").split(":"))
 QUIET_HOUR_TUPLE = (_quiet_h, _quiet_m)
 
+# Các mốc giờ gửi fact vui về uống nước - độc lập với lịch nhắc uống nước
+FACTS_TIMES = [t.strip() for t in os.getenv("FACTS_TIMES", "07:00,11:30,15:00,21:00").split(",")]
+
+# Nếu để trống, bot sẽ luôn dùng danh sách facts tĩnh trong messages.py thay vì gọi API
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
 # Danh sách Discord user ID được coi là admin (cách nhau bởi dấu phẩy).
 # Đây là cơ chế phân quyền RIÊNG của bot, không dùng quyền "Administrator" của Discord server,
 # nên 1 người có thể vừa là admin (theo bot) vừa dùng bot như user bình thường mà không xung đột,
@@ -302,6 +308,52 @@ async def check_drink_confirm(user_id, baseline: int, check_number: int):
     )
 
 
+async def generate_fact_via_gemini():
+    """
+    Gọi Gemini API sinh 1 fact vui về uống nước.
+    Trả về None nếu chưa cấu hình GEMINI_API_KEY hoặc gọi API lỗi bất kỳ lý do gì
+    (mất mạng, hết quota, sai key,...) - để hàm gọi nó tự fallback về danh sách tĩnh.
+    """
+    if not GEMINI_API_KEY:
+        return None
+
+    try:
+        from google import genai  # import trong hàm để không bắt buộc cài nếu không dùng tính năng này
+
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = await client.aio.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=(
+                "Viết đúng 1 câu fact ngắn gọn (dưới 40 từ), vui vẻ, bằng tiếng Việt, "
+                "về lợi ích hoặc điều thú vị/hài hước liên quan tới việc uống nước. "
+                "Có thể thêm 1 emoji phù hợp. Chỉ trả về đúng câu fact, không thêm lời dẫn hay giải thích gì khác."
+            ),
+        )
+        text = (response.text or "").strip()
+        return text if text else None
+    except Exception as e:
+        log.warning("Gọi Gemini API lỗi, sẽ dùng fact dự phòng: %s", e)
+        return None
+
+
+async def get_water_fact() -> str:
+    """Ưu tiên fact từ Gemini, lỗi thì tự động dùng fact tĩnh trong messages.py."""
+    fact = await generate_fact_via_gemini()
+    return fact if fact else msg.get_random_fact()
+
+
+async def send_water_fact():
+    """Gửi 1 fact vui về uống nước vào kênh, độc lập với lịch nhắc uống nước (không kèm nút bấm)."""
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel is None:
+        log.error("Không tìm thấy channel ID %s - kiểm tra lại .env", CHANNEL_ID)
+        return
+
+    fact = await get_water_fact()
+    await channel.send(f"💡 **Fact vui về nước:**\n{fact}")
+    log.info("Đã gửi fact lúc %s", vn_now().strftime("%H:%M:%S"))
+
+
 def setup_scheduler():
     """Đăng ký các job nhắc nhở theo REMINDER_TIMES trong .env"""
     for time_str in REMINDER_TIMES:
@@ -318,6 +370,21 @@ def setup_scheduler():
             replace_existing=True,
         )
         log.info("Đã đăng ký nhắc nhở lúc %s hằng ngày", time_str)
+
+    for time_str in FACTS_TIMES:
+        try:
+            hour, minute = map(int, time_str.split(":"))
+        except ValueError:
+            log.warning("Bỏ qua giờ fact không hợp lệ: %s", time_str)
+            continue
+
+        scheduler.add_job(
+            send_water_fact,
+            trigger=CronTrigger(hour=hour, minute=minute),
+            id=f"fact_{time_str}",
+            replace_existing=True,
+        )
+        log.info("Đã đăng ký gửi fact lúc %s hằng ngày", time_str)
 
 
 # ---------- Sự kiện bot ----------

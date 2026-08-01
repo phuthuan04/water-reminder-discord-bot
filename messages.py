@@ -53,6 +53,19 @@ FOLLOWUP_MESSAGES = [
     "Chưa uống nước thiệt hả? Đi uống ngay đi nha, mình đợi 🙏",
 ]
 
+# Facts vui về uống nước - dùng làm DỰ PHÒNG khi Gemini API lỗi/chưa cấu hình,
+# hoặc dùng luôn nếu không cấu hình GEMINI_API_KEY.
+WATER_FACTS = [
+    "💧 Cơ thể bạn chiếm khoảng 60% là nước — về cơ bản bạn là 1 cái bình nước biết đi lại và than phiền.",
+    "🧠 Não bộ chứa tới ~85% là nước, thiếu nước 1 chút thôi là não đã 'lag' giảm tập trung liền.",
+    "⏳ Con người có thể nhịn ăn cả tháng, nhưng thiếu nước thì chỉ trụ được vài ngày thôi — nước quan trọng hơn đồ ăn nhiều.",
+    "😌 Đau đầu bất chợt? Có thể chỉ đơn giản là do thiếu nước, uống 1 ly trước khi vội uống thuốc nha.",
+    "✨ Uống đủ nước giúp da căng mọng, giảm khô ráp — rẻ hơn mỹ phẩm mà hiệu quả không kém.",
+    "🏃 Chỉ cần mất nước nhẹ thôi cũng đã khiến cơ thể mệt mỏi, uể oải hơn bình thường rồi.",
+    "🩸 Thiếu nước làm máu đặc hơn, tim phải làm việc cực hơn — uống nước là đang 'thương' trái tim mình đó.",
+    "🌊 Trái Đất có tới 70% là nước, nhưng chưa tới 1% là nước sạch con người dùng được — trân trọng từng ly nước bạn đang có nha.",
+]
+
 # Ánh xạ category (dùng trong lệnh /themtinnhan, /xemtinnhan, /xoatinnhan)
 # sang danh sách có sẵn tương ứng - dùng chung ở nhiều nơi nên định nghĩa 1 lần.
 CATEGORY_TO_BUILTIN = {
@@ -89,3 +102,8 @@ def get_random_nudge() -> str:
 
 def get_random_followup() -> str:
     return random.choice(_get_combined("followup"))
+
+
+def get_random_fact() -> str:
+    """Fact tĩnh, dùng làm dự phòng khi Gemini API lỗi hoặc chưa cấu hình."""
+    return random.choice(WATER_FACTS)
