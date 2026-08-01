@@ -49,6 +49,19 @@ class MoodCheckin(Base):
     note = Column(String, nullable=True)
 
 
+class CustomMessage(Base):
+    """
+    Tin nhắn do admin tự thêm, bổ sung thêm vào các mẫu tin nhắn có sẵn trong messages.py
+    (không thay thế, chỉ mở rộng thêm lựa chọn khi bot chọn ngẫu nhiên).
+    """
+    __tablename__ = "custom_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category = Column(String, nullable=False)  # reminder / health / praise / nudge / followup
+    content = Column(String, nullable=False)
+    added_by = Column(String, nullable=True)  # Discord user ID người thêm
+
+
 def init_db():
     """Tạo bảng nếu chưa tồn tại. Gọi 1 lần khi bot khởi động."""
     Base.metadata.create_all(engine)
@@ -272,5 +285,43 @@ def get_all_users_raw() -> list:
     try:
         users = session.query(User).all()
         return [(u.id, u.display_name, u.is_active) for u in users]
+    finally:
+        session.close()
+
+
+# ---------- Tin nhắn tùy chỉnh (custom messages) ----------
+
+def add_custom_message(category: str, content: str, added_by: str) -> int:
+    """Thêm 1 tin nhắn tùy chỉnh, trả về ID vừa tạo."""
+    session = SessionLocal()
+    try:
+        entry = CustomMessage(category=category, content=content, added_by=str(added_by))
+        session.add(entry)
+        session.commit()
+        return entry.id
+    finally:
+        session.close()
+
+
+def remove_custom_message(message_id: int) -> bool:
+    """Xóa 1 tin nhắn tùy chỉnh theo ID. Trả về True nếu xóa thành công, False nếu không tìm thấy."""
+    session = SessionLocal()
+    try:
+        entry = session.query(CustomMessage).filter(CustomMessage.id == message_id).first()
+        if entry is None:
+            return False
+        session.delete(entry)
+        session.commit()
+        return True
+    finally:
+        session.close()
+
+
+def get_custom_messages(category: str) -> list:
+    """Trả về danh sách [(id, content), ...] các tin nhắn tùy chỉnh thuộc 1 category."""
+    session = SessionLocal()
+    try:
+        rows = session.query(CustomMessage).filter(CustomMessage.category == category).all()
+        return [(r.id, r.content) for r in rows]
     finally:
         session.close()

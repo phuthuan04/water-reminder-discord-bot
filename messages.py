@@ -2,9 +2,14 @@
 messages.py
 Kho chứa các mẫu tin nhắn. Tách riêng ra để dễ chỉnh sửa, thêm bớt
 mà không cần đụng vào logic chính của bot.
+
+Mỗi hàm get_random_* sẽ gộp danh sách có sẵn (viết cứng bên dưới)
+VỚI danh sách tin nhắn admin tự thêm qua lệnh /themtinnhan (lưu trong database),
+rồi mới chọn ngẫu nhiên 1 câu trong toàn bộ danh sách gộp đó.
 """
 
 import random
+import database as db
 
 # Tin nhắn nhắc nhở uống nước - sẽ được chọn ngẫu nhiên mỗi lần nhắc
 REMINDER_MESSAGES = [
@@ -48,22 +53,39 @@ FOLLOWUP_MESSAGES = [
     "Chưa uống nước thiệt hả? Đi uống ngay đi nha, mình đợi 🙏",
 ]
 
+# Ánh xạ category (dùng trong lệnh /themtinnhan, /xemtinnhan, /xoatinnhan)
+# sang danh sách có sẵn tương ứng - dùng chung ở nhiều nơi nên định nghĩa 1 lần.
+CATEGORY_TO_BUILTIN = {
+    "reminder": REMINDER_MESSAGES,
+    "health": HEALTH_CHECKIN_MESSAGES,
+    "praise": PRAISE_MESSAGES,
+    "nudge": NUDGE_MESSAGES,
+    "followup": FOLLOWUP_MESSAGES,
+}
+
+
+def _get_combined(category: str) -> list:
+    """Gộp danh sách có sẵn (viết cứng) + danh sách tùy chỉnh (lưu trong DB)."""
+    builtin = CATEGORY_TO_BUILTIN.get(category, [])
+    custom = [content for _id, content in db.get_custom_messages(category)]
+    return builtin + custom
+
 
 def get_random_reminder() -> str:
-    return random.choice(REMINDER_MESSAGES)
+    return random.choice(_get_combined("reminder"))
 
 
 def get_random_health_checkin() -> str:
-    return random.choice(HEALTH_CHECKIN_MESSAGES)
+    return random.choice(_get_combined("health"))
 
 
 def get_random_praise() -> str:
-    return random.choice(PRAISE_MESSAGES)
+    return random.choice(_get_combined("praise"))
 
 
 def get_random_nudge() -> str:
-    return random.choice(NUDGE_MESSAGES)
+    return random.choice(_get_combined("nudge"))
 
 
 def get_random_followup() -> str:
-    return random.choice(FOLLOWUP_MESSAGES)
+    return random.choice(_get_combined("followup"))

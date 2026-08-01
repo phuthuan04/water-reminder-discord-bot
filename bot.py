@@ -494,6 +494,67 @@ async def huongdan(interaction: discord.Interaction):
     await interaction.response.send_message(guide)
 
 
+_CATEGORY_CHOICES = [
+    app_commands.Choice(name="Nhắc nhở uống nước", value="reminder"),
+    app_commands.Choice(name="Hỏi thăm sức khỏe", value="health"),
+    app_commands.Choice(name="Khen ngợi (khi bấm Đã uống)", value="praise"),
+    app_commands.Choice(name="Nhắc khi bấm Chưa uống", value="nudge"),
+    app_commands.Choice(name="Hỏi lại đã uống chưa", value="followup"),
+]
+
+
+@bot.tree.command(name="themtinnhan", description="[Admin] Thêm 1 tin nhắn tùy chỉnh vào loại đã chọn")
+@app_commands.describe(loai="Loại tin nhắn", noi_dung="Nội dung tin nhắn muốn thêm")
+@app_commands.choices(loai=_CATEGORY_CHOICES)
+async def themtinnhan(interaction: discord.Interaction, loai: app_commands.Choice[str], noi_dung: str):
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("Lệnh này chỉ dành cho admin thôi nha 😉", ephemeral=True)
+        return
+
+    message_id = db.add_custom_message(loai.value, noi_dung, interaction.user.id)
+    await interaction.response.send_message(
+        f"✅ Đã thêm tin nhắn tùy chỉnh (ID: `{message_id}`) vào loại **{loai.name}**:\n> {noi_dung}",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="xemtinnhan", description="[Admin] Xem danh sách tin nhắn (mặc định + tùy chỉnh) theo loại")
+@app_commands.describe(loai="Loại tin nhắn muốn xem")
+@app_commands.choices(loai=_CATEGORY_CHOICES)
+async def xemtinnhan(interaction: discord.Interaction, loai: app_commands.Choice[str]):
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("Lệnh này chỉ dành cho admin thôi nha 😉", ephemeral=True)
+        return
+
+    builtin = msg.CATEGORY_TO_BUILTIN.get(loai.value, [])
+    custom = db.get_custom_messages(loai.value)
+
+    lines = [f"## Danh sách tin nhắn - {loai.name}", "", f"**Mặc định ({len(builtin)}):**"]
+    lines += [f"• {text}" for text in builtin]
+    lines.append("")
+    lines.append(f"**Tùy chỉnh ({len(custom)}):**")
+    if custom:
+        lines += [f"• `ID {mid}` — {text}" for mid, text in custom]
+    else:
+        lines.append("_(chưa có tin nhắn tùy chỉnh nào)_")
+
+    await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
+
+@bot.tree.command(name="xoatinnhan", description="[Admin] Xóa 1 tin nhắn tùy chỉnh theo ID")
+@app_commands.describe(id="ID tin nhắn tùy chỉnh muốn xóa (xem qua /xemtinnhan)")
+async def xoatinnhan(interaction: discord.Interaction, id: int):
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("Lệnh này chỉ dành cho admin thôi nha 😉", ephemeral=True)
+        return
+
+    success = db.remove_custom_message(id)
+    if success:
+        await interaction.response.send_message(f"🗑️ Đã xóa tin nhắn tùy chỉnh ID `{id}`.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"Không tìm thấy tin nhắn tùy chỉnh ID `{id}`.", ephemeral=True)
+
+
 @bot.tree.command(name="thongbao", description="[Admin] Đăng thông báo cập nhật mới của bot vào kênh này")
 @app_commands.describe(noi_dung="Nội dung cập nhật muốn thông báo")
 async def thongbao(interaction: discord.Interaction, noi_dung: str):
