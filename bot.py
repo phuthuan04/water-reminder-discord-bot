@@ -23,6 +23,8 @@ from discord.ext import commands
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.jobstores.base import JobLookupError
 import matplotlib
 matplotlib.use("Agg")  # không cần giao diện đồ họa, chỉ xuất ảnh
 import matplotlib.pyplot as plt
@@ -47,7 +49,18 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh")
 REMINDER_TIMES = [t.strip() for t in os.getenv("REMINDER_TIMES", "08:00,12:00,15:00,20:00").split(",")]
-FOLLOWUP_MINUTES = int(os.getenv("REMINDER_FOLLOWUP_MINUTES", "30"))
+
+# Chuỗi nhắc "chưa bấm nút gì cả" - lặp mỗi bao nhiêu phút, tối đa mấy lần trước khi bỏ qua
+BUTTON_REMINDER_INTERVAL = int(os.getenv("BUTTON_REMINDER_INTERVAL_MINUTES", "15"))
+BUTTON_REMINDER_MAX = int(os.getenv("BUTTON_REMINDER_MAX", "2"))
+
+# Chuỗi kiểm tra "đã uống chưa" sau khi bấm nút Chưa uống - lặp mỗi bao nhiêu phút, tối đa mấy lần
+DRINK_CONFIRM_INTERVAL = int(os.getenv("DRINK_CONFIRM_INTERVAL_MINUTES", "5"))
+DRINK_CONFIRM_MAX = int(os.getenv("DRINK_CONFIRM_MAX", "2"))
+
+# Giờ bắt đầu im lặng, không nhắc thêm nữa (định dạng HH:MM)
+_quiet_h, _quiet_m = map(int, os.getenv("QUIET_HOUR", "22:30").split(":"))
+QUIET_HOUR_TUPLE = (_quiet_h, _quiet_m)
 
 # Danh sách Discord user ID được coi là admin (cách nhau bởi dấu phẩy).
 # Đây là cơ chế phân quyền RIÊNG của bot, không dùng quyền "Administrator" của Discord server,
@@ -63,7 +76,16 @@ intents = discord.Intents.default()
 intents.message_content = False  # không cần đọc nội dung tin nhắn, chỉ dùng slash command + button
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-scheduler = AsyncIOScheduler(timezone=TIMEZONE)
+
+# Scheduler dùng "persistent job store" - lưu toàn bộ lịch (kể cả chu kỳ nhắc lại
+# đang dở) thẳng vào file SQLite, dùng chung ổ Volume với database chính.
+# Nhờ vậy nếu bot restart (deploy code mới, Railway khởi động lại,...), mọi lịch
+# nhắc đang dở sẽ tự động được khôi phục đúng như cũ, không bị mất.
+_SCHEDULER_DB_PATH = os.getenv("DATABASE_PATH", "water_reminder.db")
+scheduler = AsyncIOScheduler(
+    timezone=TIMEZONE,
+    jobstores={"default": SQLAlchemyJobStore(url=f"sqlite:///{_SCHEDULER_DB_PATH}")},
+)
 
 
 def vn_now() -> datetime:
@@ -81,7 +103,26 @@ def is_admin(user_id) -> bool:
     return str(user_id) in ADMIN_USER_IDS
 
 
+def is_quiet_hours() -> bool:
+    """Từ QUIET_HOUR (mặc định 22:30) trở đi, không gửi thêm bất kỳ nhắc nhở nào nữa."""
+    now = vn_now()
+    return (now.hour, now.minute) >= QUIET_HOUR_TUPLE
+
+
 # ---------- Giao diện nút bấm (View) ----------
+def _cycle_job_id(user_id) -> str:
+    """Mỗi user chỉ có tối đa 1 job chu kỳ nhắc đang chờ tại 1 thời điểm, dùng chung 1 ID để dễ hủy/thay thế."""
+    return f"cycle_{user_id}"
+
+
+def _cancel_cycle(user_id):
+    """Hủy job chu kỳ nhắc đang chờ của user này, nếu có."""
+    try:
+        scheduler.remove_job(_cycle_job_id(user_id))
+    except JobLookupError:
+        pass
+
+
 class WaterReminderView(discord.ui.View):
     """
     View chứa 2 nút: Đã uống / Chưa uống.
@@ -110,6 +151,9 @@ class WaterReminderView(discord.ui.View):
         if not await self._check_registered(interaction):
             return
 
+        # Đã uống rồi -> hủy luôn mọi chu kỳ nhắc đang chờ của người này
+        _cancel_cycle(interaction.user.id)
+
         db.log_water(interaction.user.id)
         today_count = db.get_today_count(interaction.user.id)
         streak_count = db.get_streak(interaction.user.id)
@@ -130,10 +174,30 @@ class WaterReminderView(discord.ui.View):
 
         await interaction.response.send_message(msg.get_random_nudge(), ephemeral=True)
 
+        if is_quiet_hours():
+            return  # Đã qua giờ im lặng, không lên lịch kiểm tra thêm nữa
+
+        # Chuyển sang chuỗi "kiểm tra đã uống chưa", hủy chuỗi cũ (nếu có) và bắt đầu lại từ đầu
+        _cancel_cycle(interaction.user.id)
+        baseline = db.get_today_count(interaction.user.id)
+        scheduler.add_job(
+            check_drink_confirm,
+            trigger="date",
+            run_date=vn_now() + timedelta(minutes=DRINK_CONFIRM_INTERVAL),
+            args=[interaction.user.id, baseline, 1],
+            id=_cycle_job_id(interaction.user.id),
+            replace_existing=True,
+            misfire_grace_time=300,
+        )
+
 
 # ---------- Logic gửi nhắc nhở ----------
 async def send_water_reminder():
     """Được scheduler gọi theo giờ đã cấu hình."""
+    if is_quiet_hours():
+        log.info("Đang trong giờ im lặng (từ %02d:%02d) - bỏ qua lượt nhắc này", *QUIET_HOUR_TUPLE)
+        return
+
     channel = bot.get_channel(CHANNEL_ID)
     if channel is None:
         log.error("Không tìm thấy channel ID %s - kiểm tra lại .env", CHANNEL_ID)
@@ -155,40 +219,87 @@ async def send_water_reminder():
     await channel.send(text, view=view)
     log.info("Đã gửi nhắc nhở lúc %s cho %d người", vn_now().strftime("%H:%M:%S"), len(active_users))
 
-    # Ghi lại số lần uống nước hiện tại của từng người (baseline),
-    # để lát nữa so sánh xem có ai chưa uống thêm lần nào không.
-    baseline = {user_id: db.get_today_count(user_id) for user_id, _ in active_users}
-    user_ids = [user_id for user_id, _ in active_users]
+    # Với mỗi người, lên lịch riêng chuỗi "chưa bấm nút gì cả" - ghi lại baseline
+    # (số lần đã uống hiện tại) để lát so sánh xem có uống thêm chưa.
+    for user_id, _ in active_users:
+        baseline = db.get_today_count(user_id)
+        scheduler.add_job(
+            check_no_response,
+            trigger="date",
+            run_date=vn_now() + timedelta(minutes=BUTTON_REMINDER_INTERVAL),
+            args=[user_id, baseline, 1],
+            id=_cycle_job_id(user_id),
+            replace_existing=True,
+            misfire_grace_time=300,
+        )
 
-    scheduler.add_job(
-        check_and_followup,
-        trigger="date",
-        run_date=vn_now() + timedelta(minutes=FOLLOWUP_MINUTES),
-        args=[user_ids, baseline],
-        misfire_grace_time=300,
-    )
 
-
-async def check_and_followup(user_ids: list, baseline: dict):
+async def check_no_response(user_id, baseline: int, repeat_number: int):
     """
-    Chạy sau FOLLOWUP_MINUTES kể từ lúc gửi reminder.
-    Ai chưa uống thêm lần nào so với baseline sẽ được nhắc lại riêng.
+    Chuỗi nhắc khi người dùng CHƯA BẤM NÚT GÌ CẢ.
+    repeat_number: lần nhắc lại thứ mấy (1, 2, ...). Vượt quá BUTTON_REMINDER_MAX thì bỏ qua.
     """
+    if is_quiet_hours():
+        return
+
+    if db.get_today_count(user_id) > baseline:
+        return  # Đã uống rồi (qua /uong hoặc nút bấm) - không cần nhắc nữa
+
+    if repeat_number > BUTTON_REMINDER_MAX:
+        log.info("Đã nhắc tối đa cho user %s mà chưa phản hồi - bỏ qua", user_id)
+        return
+
     channel = bot.get_channel(CHANNEL_ID)
     if channel is None:
         return
 
-    still_not_done = [
-        uid for uid in user_ids
-        if db.get_today_count(uid) <= baseline.get(uid, 0)
-    ]
+    view = WaterReminderView()
+    await channel.send(f"<@{user_id}> {msg.get_random_reminder()}", view=view)
+    log.info("Nhắc lại (chưa bấm nút) lần %d cho user %s", repeat_number, user_id)
 
-    if not still_not_done:
+    scheduler.add_job(
+        check_no_response,
+        trigger="date",
+        run_date=vn_now() + timedelta(minutes=BUTTON_REMINDER_INTERVAL),
+        args=[user_id, baseline, repeat_number + 1],
+        id=_cycle_job_id(user_id),
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+
+
+async def check_drink_confirm(user_id, baseline: int, check_number: int):
+    """
+    Chuỗi kiểm tra sau khi người dùng bấm "Chưa uống".
+    check_number: lần hỏi lại thứ mấy (1, 2, ...). Vượt quá DRINK_CONFIRM_MAX thì bỏ qua.
+    """
+    if is_quiet_hours():
         return
 
-    mentions = " ".join(f"<@{uid}>" for uid in still_not_done)
-    await channel.send(f"{mentions} {msg.get_random_followup()}")
-    log.info("Đã nhắc lại cho %d người chưa uống nước", len(still_not_done))
+    if db.get_today_count(user_id) > baseline:
+        return  # Đã uống rồi - không cần hỏi nữa
+
+    if check_number > DRINK_CONFIRM_MAX:
+        log.info("Đã hỏi tối đa cho user %s mà vẫn chưa uống - bỏ qua", user_id)
+        return
+
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel is None:
+        return
+
+    view = WaterReminderView()
+    await channel.send(f"<@{user_id}> {msg.get_random_followup()}", view=view)
+    log.info("Hỏi lại (đã uống chưa) lần %d cho user %s", check_number, user_id)
+
+    scheduler.add_job(
+        check_drink_confirm,
+        trigger="date",
+        run_date=vn_now() + timedelta(minutes=DRINK_CONFIRM_INTERVAL),
+        args=[user_id, baseline, check_number + 1],
+        id=_cycle_job_id(user_id),
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
 
 
 def setup_scheduler():
