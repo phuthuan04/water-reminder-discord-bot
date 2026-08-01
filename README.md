@@ -4,6 +4,7 @@ Chatbot Discord nhắc uống nước, hỏi thăm sức khỏe, theo dõi strea
 > HCMC, July 30th, 2026
 > 
 > 💌 **Chatbot này được viết ra dành cho Khánh Đan.**
+> 
 > Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé. Anh luôn quân tâm em. Anh yêu em.
 > 
 > — *phuthuan04*
