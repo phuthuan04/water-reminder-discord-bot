@@ -8,6 +8,14 @@
 
 ---
 
+> HCMC, July 30th, 2026
+> 💌 **Chatbot này được viết ra dành cho Khánh Đan.**
+> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé. Anh luôn quân tâm em. Anh yêu em.
+> — *phuthuan04*
+> *Will be updated frequently*
+
+---
+
 ## Mục lục
 
 1. [Tổng quan](#1-tổng-quan)
@@ -247,6 +255,8 @@ Chỉ admin mới thêm/xóa được (qua `/themtinnhan`, `/xoatinnhan`), trán
 
 Lấy API key miễn phí tại: https://aistudio.google.com/app/apikey
 
+**Tùy chỉnh prompt**: nội dung yêu cầu gửi cho Gemini nằm trong biến `PROMPT_FACT` — để trống thì dùng prompt mặc định (đã viết sẵn trong code), hoặc điền giá trị riêng trên Railway (tab Variables) để đổi giọng điệu/chủ đề facts **mà không cần sửa code hay deploy lại**. Đổi biến môi trường trên Railway tự động kích hoạt redeploy.
+
 ---
 
 ## 11. Biến môi trường
@@ -264,6 +274,7 @@ Lấy API key miễn phí tại: https://aistudio.google.com/app/apikey
 | `QUIET_HOUR` | ❌ | `22:30` | Giờ bắt đầu ngừng nhắc trong ngày |
 | `FACTS_TIMES` | ❌ | `07:00,11:30,15:00,21:00` | Các mốc giờ gửi fact |
 | `GEMINI_API_KEY` | ❌ | (rỗng) | Để trống thì luôn dùng fact tĩnh |
+| `PROMPT_FACT` | ❌ | (prompt mặc định trong code) | Prompt gửi cho Gemini - đổi trực tiếp trên Railway, không cần sửa code/deploy lại |
 | `TIMEZONE` | ❌ | `Asia/Ho_Chi_Minh` | Timezone cho scheduler |
 | `DATABASE_PATH` | ❌ | `water_reminder.db` | Đường dẫn DB. Production trỏ Volume, VD `/data/water_reminder.db` |
 

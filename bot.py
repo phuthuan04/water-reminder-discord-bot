@@ -354,7 +354,7 @@ async def send_water_fact():
         return
 
     fact = await get_water_fact()
-    await channel.send(f"💡 **Fact vui về nước:**\n{fact}")
+    await channel.send(f"💡 **Fun Fact:**\n{fact}")
     log.info("Đã gửi fact lúc %s", vn_now().strftime("%H:%M:%S"))
 
 
