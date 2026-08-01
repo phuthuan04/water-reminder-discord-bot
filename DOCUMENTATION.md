@@ -4,7 +4,7 @@
 **Ngôn ngữ:** Python 3.11
 **Trạng thái:** Đang vận hành (Production)
 **Nền tảng deploy:** Railway
-**Cập nhật lần cuối:** 30/07/2026
+**Cập nhật lần cuối:** 01/08/2026
 
 ---
 
@@ -16,35 +16,37 @@
 4. [Cấu trúc thư mục](#4-cấu-trúc-thư-mục)
 5. [Database schema](#5-database-schema)
 6. [Danh sách Slash Commands](#6-danh-sách-slash-commands)
-7. [Biến môi trường](#7-biến-môi-trường)
-8. [Hướng dẫn cài đặt & chạy local](#8-hướng-dẫn-cài-đặt--chạy-local)
-9. [Hướng dẫn deploy lên Railway](#9-hướng-dẫn-deploy-lên-railway)
-10. [Vận hành & bảo trì](#10-vận-hành--bảo-trì)
-11. [Xử lý sự cố thường gặp](#11-xử-lý-sự-cố-thường-gặp)
-12. [Lịch sử phát triển (Changelog)](#12-lịch-sử-phát-triển-changelog)
-13. [Hướng phát triển tiếp theo](#13-hướng-phát-triển-tiếp-theo)
+7. [Hệ thống phân quyền Admin](#7-hệ-thống-phân-quyền-admin)
+8. [Chu kỳ nhắc nhở (Reminder Cycle)](#8-chu-kỳ-nhắc-nhở-reminder-cycle)
+9. [Tin nhắn tùy chỉnh (Custom Messages)](#9-tin-nhắn-tùy-chỉnh-custom-messages)
+10. [Fun Facts qua Gemini API](#10-fun-facts-qua-gemini-api)
+11. [Biến môi trường](#11-biến-môi-trường)
+12. [Hướng dẫn cài đặt & chạy local](#12-hướng-dẫn-cài-đặt--chạy-local)
+13. [Hướng dẫn deploy lên Railway](#13-hướng-dẫn-deploy-lên-railway)
+14. [Vận hành & bảo trì](#14-vận-hành--bảo-trì)
+15. [Xử lý sự cố thường gặp](#15-xử-lý-sự-cố-thường-gặp)
+16. [Lịch sử phát triển (Changelog)](#16-lịch-sử-phát-triển-changelog)
+17. [Hướng phát triển tiếp theo](#17-hướng-phát-triển-tiếp-theo)
 
 ---
 
 ## 1. Tổng quan
 
-**Stay Hydrated!** là 1 Discord bot giúp nhắc nhở người dùng uống nước đều đặn trong ngày, đồng thời theo dõi thói quen qua thời gian bằng streak (chuỗi ngày liên tục) và biểu đồ thống kê.
+**Stay Hydrated!** là 1 Discord bot giúp nhắc nhở người dùng uống nước đều đặn trong ngày, theo dõi thói quen qua streak, và tạo cảm giác được quan tâm qua tin nhắn đa dạng + fact vui.
 
 ### Tính năng chính
 
-- Gửi tin nhắn nhắc nhở uống nước theo lịch cố định trong ngày (có thể tùy chỉnh giờ)
-- Bộ tin nhắn đa dạng, chọn ngẫu nhiên để tránh nhàm chán, kèm câu hỏi thăm sức khỏe xen kẽ
-- Nút bấm tương tác trực tiếp (✅ Đã uống / ⏳ Chưa uống) ngay dưới tin nhắn
-- Tự động nhắc lại nếu sau 1 khoảng thời gian vẫn chưa ghi nhận uống nước
+- Gửi tin nhắn nhắc nhở theo lịch cố định, kèm câu hỏi thăm sức khỏe xen kẽ
+- Nút bấm tương tác (✅ Đã uống / ⏳ Chưa uống)
+- **Chu kỳ nhắc lại thông minh** theo 2 nhánh (chưa bấm nút / đã bấm "chưa uống"), tự dừng sau giờ quy định mỗi tối
 - Theo dõi streak — chuỗi ngày uống nước liên tục
 - Vẽ biểu đồ thống kê 7 ngày gần nhất
-- Xuất toàn bộ dữ liệu thô ra file CSV
-- Hỗ trợ nhiều người dùng cùng lúc (mô hình đăng ký `/dangky`), phù hợp dùng chung giữa các cặp đôi/nhóm nhỏ
+- Xuất dữ liệu thô ra CSV qua Discord
+- Hỗ trợ nhiều người dùng cùng lúc (`/dangky`)
+- **Phân quyền Admin riêng của bot**, độc lập với role Discord, không lộ ra ngoài
+- **Tin nhắn tùy chỉnh** — admin có thể thêm tin nhắn của riêng mình, gộp cùng bộ tin nhắn có sẵn
+- **Fun facts về uống nước** 4 lần/ngày, sinh động qua Gemini API (có fallback tĩnh)
 - Tự động đăng hướng dẫn sử dụng và thông báo cập nhật vào kênh Discord
-
-### Đối tượng sử dụng
-
-Ban đầu thiết kế cho 1 người dùng cá nhân, sau đó mở rộng cho nhiều người dùng chung 1 server (ví dụ: cặp đôi cùng nhắc nhau uống nước).
 
 ---
 
@@ -52,25 +54,30 @@ Ban đầu thiết kế cho 1 người dùng cá nhân, sau đó mở rộng cho
 
 ```
 ┌──────────────────────┐
-│   Discord Gateway      │  ← Người dùng tương tác qua slash command + nút bấm
+│   Discord Gateway      │
 └───────────┬───────────┘
             │
 ┌───────────▼───────────┐
-│   bot.py (discord.py)  │  ← Xử lý command, event, giao diện nút bấm
+│   bot.py (discord.py)  │  ← Command, event, view, chu kỳ nhắc
 └───────────┬───────────┘
             │
-     ┌──────┴──────┐
-     │              │
-┌────▼────┐   ┌─────▼──────┐
-│Scheduler │   │ database.py │  ← SQLAlchemy ORM, thao tác SQLite
-│APScheduler│  └─────┬──────┘
-└──────────┘         │
-              ┌───────▼────────┐
-              │ SQLite (volume)│  ← Lưu trên Railway Volume, bền vững qua các lần deploy
-              └────────────────┘
+     ┌──────┴──────────────┐
+     │                      │
+┌────▼─────────┐    ┌───────▼──────┐
+│  Scheduler     │    │ database.py   │  ← SQLAlchemy ORM
+│  APScheduler    │    └───────┬──────┘
+│  (persistent    │            │
+│   job store)     │    ┌───────▼────────┐
+└────┬─────────────┘    │ SQLite (Volume) │  ← Dùng CHUNG 1 file cho cả
+     │                   └────────────────┘     dữ liệu app LẪN lịch nhắc
+     │
+┌────▼─────────┐
+│ Gemini API     │  ← Sinh fact động, fallback về danh sách tĩnh nếu lỗi
+│ (tùy chọn)      │
+└────────────────┘
 ```
 
-Bot được deploy dưới dạng **worker process** (không mở HTTP port), duy trì kết nối liên tục (persistent connection) tới Discord Gateway 24/7.
+**Điểm quan trọng**: Scheduler dùng `SQLAlchemyJobStore` trỏ vào **cùng file SQLite** với dữ liệu chính (`DATABASE_PATH`). Nhờ vậy, mọi lịch nhắc đang dở (kể cả chu kỳ nhắc lại) đều **sống sót qua các lần bot restart** (deploy code mới, Railway khởi động lại,...) mà không cần code thêm cơ chế lưu trạng thái riêng.
 
 ---
 
@@ -78,15 +85,16 @@ Bot được deploy dưới dạng **worker process** (không mở HTTP port), d
 
 | Thành phần | Công nghệ | Lý do lựa chọn |
 |---|---|---|
-| Ngôn ngữ | Python 3.11 | Quen thuộc với dev, hệ sinh thái Discord bot mạnh |
-| Bot framework | `discord.py` | Chuẩn, hỗ trợ đầy đủ slash command + UI component (nút bấm) |
-| Scheduler | `APScheduler` (AsyncIOScheduler) | Đặt lịch nhắc nhở theo cron, hỗ trợ timezone tường minh |
-| Database | SQLite + `SQLAlchemy` ORM | Nhẹ, không cần server riêng, đủ dùng cho quy mô nhỏ (vài chục người dùng) |
-| Vẽ biểu đồ | `matplotlib` | Xuất ảnh PNG gửi trực tiếp qua Discord |
-| Xuất dữ liệu | `csv` (built-in) | Không cần thêm dependency, tương thích Excel |
-| Config | `python-dotenv` | Quản lý biến môi trường/bí mật tách biệt code |
-| Hosting | Railway | Hỗ trợ worker process 24/7 + Volume lưu trữ bền vững, free tier đủ dùng |
-| CI/CD | GitHub → Railway auto-deploy | Push code lên GitHub, Railway tự build & deploy lại |
+| Ngôn ngữ | Python 3.11 | |
+| Bot framework | `discord.py` | Hỗ trợ đầy đủ slash command + UI component |
+| Scheduler | `APScheduler` (AsyncIOScheduler + SQLAlchemyJobStore) | Cron theo timezone, **persistent job store** để sống sót qua restart |
+| Database | SQLite + `SQLAlchemy` ORM | Nhẹ, đủ dùng cho quy mô nhỏ |
+| Vẽ biểu đồ | `matplotlib` | |
+| Xuất dữ liệu | `csv` (built-in) | |
+| Sinh fact động | `google-genai` (Gemini API) | Có gói miễn phí hào phóng ở quy mô nhỏ, fallback tĩnh nếu lỗi |
+| Config | `python-dotenv` | |
+| Hosting | Railway | Worker process 24/7 + Volume lưu trữ bền vững |
+| CI/CD | GitHub → Railway auto-deploy | |
 
 ---
 
@@ -94,240 +102,289 @@ Bot được deploy dưới dạng **worker process** (không mở HTTP port), d
 
 ```
 water-reminder-bot/
-├── bot.py                # Entry point - khởi tạo bot, xử lý command & scheduler
-├── database.py            # Model dữ liệu (SQLAlchemy) + các hàm CRUD
-├── messages.py             # Kho tin nhắn (nhắc nhở, khen, hỏi thăm, nhắc lại)
-├── requirements.txt         # Danh sách thư viện Python
-├── .env.example             # Mẫu file cấu hình biến môi trường
-├── .env                     # Cấu hình thật (KHÔNG commit lên Git)
-├── .gitignore                # Loại trừ .env, venv/, __pycache__/, *.db
-├── Procfile                   # Khai báo lệnh chạy cho Railway
-├── README.md                   # Hướng dẫn setup nhanh
-└── DOCUMENTATION.md              # Tài liệu này
+├── bot.py                # Entry point - command, scheduler, chu kỳ nhắc, view
+├── database.py            # Model + CRUD (users, water_logs, custom_messages, mood_checkins)
+├── messages.py              # Kho tin nhắn (nhắc nhở, khen, hỏi thăm, nhắc lại, fact tĩnh)
+├── requirements.txt          # Thư viện Python
+├── .env.example                # Mẫu cấu hình
+├── .env                         # Cấu hình thật (KHÔNG commit)
+├── .gitignore                    # Loại trừ .env, venv/, __pycache__/, *.db
+├── Procfile                        # Lệnh chạy cho Railway
+├── README.md                        # Hướng dẫn setup nhanh
+└── DOCUMENTATION.md                   # Tài liệu này
 ```
 
 ---
 
 ## 5. Database schema
 
-Engine: SQLite, đường dẫn cấu hình qua biến `DATABASE_PATH` (mặc định `water_reminder.db`, production trỏ vào Railway Volume).
+Engine: SQLite, đường dẫn qua `DATABASE_PATH`. Dùng chung file với **APScheduler job store** (bảng `apscheduler_jobs` tự động được thư viện tạo, không cần quản lý thủ công).
 
-### Bảng `users`
-
+### `users`
 | Cột | Kiểu | Mô tả |
 |---|---|---|
 | `id` | String (PK) | Discord user ID |
-| `display_name` | String, nullable | Tên hiển thị Discord tại thời điểm đăng ký |
-| `is_active` | Integer | `1` = đang nhận nhắc nhở, `0` = đã `/huy` |
+| `display_name` | String, nullable | |
+| `is_active` | Integer | 1 = đang nhận nhắc nhở |
 
-### Bảng `water_logs`
-
+### `water_logs`
 | Cột | Kiểu | Mô tả |
 |---|---|---|
-| `id` | Integer (PK, autoincrement) | |
-| `user_id` | String | Discord user ID |
-| `timestamp` | DateTime | Thời điểm ghi nhận, lưu dạng **UTC** |
+| `id` | Integer (PK) | |
+| `user_id` | String | |
+| `timestamp` | DateTime | Lưu dạng **UTC** |
 
-### Bảng `mood_checkins`
-
+### `custom_messages`
 | Cột | Kiểu | Mô tả |
 |---|---|---|
-| `id` | Integer (PK, autoincrement) | |
-| `user_id` | String | Discord user ID |
-| `timestamp` | DateTime | Lưu dạng UTC |
-| `note` | String, nullable | Ghi chú (tính năng dự phòng, hiện chưa có command sử dụng) |
+| `id` | Integer (PK) | Dùng để xóa qua `/xoatinnhan` |
+| `category` | String | `reminder` / `health` / `praise` / `nudge` / `followup` |
+| `content` | String | Nội dung tin nhắn |
+| `added_by` | String, nullable | Discord user ID admin đã thêm |
 
-### Quy ước quan trọng về thời gian
+### `mood_checkins`
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| `id` | Integer (PK) | |
+| `user_id` | String | |
+| `timestamp` | DateTime | |
+| `note` | String, nullable | Dự phòng, chưa có command sử dụng |
 
-- **Toàn bộ timestamp lưu trong DB đều là giờ UTC** (`datetime.utcnow()`), không phụ thuộc múi giờ server.
-- Mọi phép tính liên quan đến "ngày hôm nay" (streak, thống kê theo ngày, `/homnay`) đều quy đổi UTC → giờ Việt Nam (UTC+7) bằng hàm nội bộ `_vn_now()` / `_vn_today()` trong `database.py`, **không** dùng `datetime.now()` hay `date.today()` trực tiếp vì các hàm này phụ thuộc múi giờ hệ điều hành của server.
+### Quy ước về thời gian
+
+Toàn bộ timestamp lưu **UTC**. Mọi phép tính "hôm nay" (streak, thống kê, log hiển thị, lịch nhắc) đều quy đổi qua hàm nội bộ `_vn_now()`/`_vn_today()` (database.py) và `vn_now()` (bot.py) — dựa trên `datetime.utcnow() + 7 giờ`, **không** dùng `datetime.now()`/`date.today()` trực tiếp vì phụ thuộc múi giờ hệ điều hành server.
 
 ---
 
 ## 6. Danh sách Slash Commands
 
-| Lệnh | Ai dùng được | Mô tả |
+| Lệnh | Quyền | Mô tả |
 |---|---|---|
-| `/dangky` | Mọi người | Đăng ký nhận nhắc nhở uống nước — **bắt buộc làm trước tiên** |
-| `/huy` | Mọi người | Ngừng nhận nhắc nhở (lịch sử vẫn giữ nguyên) |
+| `/dangky` | Mọi người | Đăng ký nhận nhắc nhở — bắt buộc trước tiên |
+| `/huy` | Mọi người | Ngừng nhận nhắc nhở |
 | `/uong` | Mọi người | Ghi nhận thủ công 1 lần uống nước |
-| `/homnay` | Mọi người | Xem số lần uống nước hôm nay + streak hiện tại |
-| `/streak` | Mọi người | Xem chuỗi ngày uống nước liên tục |
-| `/thongke` | Mọi người | Vẽ biểu đồ uống nước 7 ngày gần nhất |
-| `/xuatdata` | Mọi người | Xuất toàn bộ dữ liệu thô ra 2 file CSV (`water_logs.csv`, `users.csv`) |
-| `/test` | Mọi người | [Debug] Gửi thử tin nhắn nhắc nhở ngay lập tức |
-| `/huongdan` | Mọi người | Đăng hướng dẫn sử dụng bot vào kênh hiện tại |
-| `/thongbao` | **Chỉ Admin server** | Đăng thông báo cập nhật mới, tự tag toàn bộ người đã đăng ký |
+| `/homnay` | Mọi người | Số lần uống hôm nay + streak |
+| `/streak` | Mọi người | Chuỗi ngày uống nước liên tục |
+| `/thongke` | Mọi người | Biểu đồ 7 ngày gần nhất |
+| `/xuatdata` | Mọi người | Xuất CSV (`water_logs.csv`, `users.csv`) |
+| `/huongdan` | Mọi người | Đăng hướng dẫn sử dụng vào kênh hiện tại |
+| `/test` | Mọi người | [Debug] Gửi thử reminder ngay lập tức |
+| `/testfact` | Mọi người | [Debug] Gửi thử 1 fact ngay lập tức |
+| `/thongbao` | **Admin** | Đăng thông báo cập nhật, tự tag người đã đăng ký |
+| `/themtinnhan` | **Admin** | Thêm tin nhắn tùy chỉnh (chọn loại qua dropdown) |
+| `/xemtinnhan` | **Admin** | Xem danh sách tin nhắn (mặc định + tùy chỉnh) theo loại |
+| `/xoatinnhan` | **Admin** | Xóa 1 tin nhắn tùy chỉnh theo ID |
 
 ### Tương tác qua nút bấm
 
 Mỗi tin nhắn nhắc nhở kèm 2 nút:
-- **✅ Đã uống** — ghi log, phản hồi riêng (ephemeral) kèm số lần hôm nay + streak
-- **⏳ Chưa uống** — phản hồi riêng, không ghi log
+- **✅ Đã uống** — log nước, hủy mọi chu kỳ nhắc đang chờ, phản hồi riêng kèm streak
+- **⏳ Chưa uống** — chuyển sang chuỗi "kiểm tra đã uống chưa" (xem mục 8)
 
-Chỉ người đã `/dangky` mới bấm được nút (kiểm tra qua `is_user_registered`).
+Chỉ người đã `/dangky` mới bấm được nút.
 
 ---
 
-## 7. Biến môi trường
+## 7. Hệ thống phân quyền Admin
 
-Khai báo trong `.env` (local) hoặc tab **Variables** trên Railway (production).
+Bot dùng **danh sách admin riêng** (`ADMIN_USER_IDS`), **không** dùng quyền "Administrator" của Discord server.
+
+**Lý do thiết kế này**: quyền Admin theo role Discord sẽ hiển thị công khai (ai cũng thấy được role/badge trong danh sách thành viên). Với `ADMIN_USER_IDS` khai báo riêng trong biến môi trường, chỉ bot mới biết ai là admin — không lộ ra giao diện Discord, và 1 người có thể **vừa là admin, vừa dùng bot như user thường** (gõ `/dangky`, `/uong`,...) mà không xung đột, vì đây là 2 tầng kiểm tra độc lập.
+
+Kiểm tra qua hàm `is_admin(user_id)` trong `bot.py`, áp dụng cho: `/thongbao`, `/themtinnhan`, `/xemtinnhan`, `/xoatinnhan`.
+
+---
+
+## 8. Chu kỳ nhắc nhở (Reminder Cycle)
+
+### Sơ đồ logic
+
+```
+Reminder chính gửi ra (theo REMINDER_TIMES)
+        │
+        ▼
+  [Chưa bấm nút gì cả]
+        │
+   Sau BUTTON_REMINDER_INTERVAL phút vẫn im lặng?
+        │
+   Nhắc lại (tối đa BUTTON_REMINDER_MAX lần) ──► vẫn im lặng ──► BỎ QUA
+        │
+        ▼ (bấm nút bất kỳ lúc nào)
+   ┌─────────────────┐
+   │ ✅ Đã uống         │──► Hủy chu kỳ, kết thúc
+   └─────────────────┘
+   ┌─────────────────┐
+   │ ⏳ Chưa uống        │──► Gửi ngay lời nhắc uống nước
+   └─────────────────┘         │
+                          Sau DRINK_CONFIRM_INTERVAL phút, hỏi lại "uống chưa?"
+                                │
+                         Lặp tối đa DRINK_CONFIRM_MAX lần ──► vẫn chưa ──► BỎ QUA
+```
+
+**Giờ im lặng (`QUIET_HOUR`, mặc định 22:30)**: mọi bước gửi tin (reminder chính, cả 2 chuỗi nhắc lại) đều tự kiểm tra giờ hiện tại trước khi gửi — nếu đã qua giờ này thì dừng hẳn, không nhắc thêm trong ngày. Giờ im lặng chỉ áp dụng **trong ngày hôm đó** (từ giờ quy định tới 23:59) — sang ngày mới sẽ không còn bị chặn, để không ảnh hưởng lịch nhắc buổi sáng hôm sau.
+
+### Cơ chế kỹ thuật
+
+Mỗi user chỉ có tối đa **1 job đang chờ tại 1 thời điểm** (ID dạng `cycle_{user_id}`). Khi bấm nút, job cũ bị hủy (`scheduler.remove_job`) và job mới được lên lịch thay thế — đảm bảo không bao giờ có 2 chuỗi nhắc chạy song song cho cùng 1 người.
+
+---
+
+## 9. Tin nhắn tùy chỉnh (Custom Messages)
+
+Mỗi loại tin nhắn (`reminder`, `health`, `praise`, `nudge`, `followup`) có 1 danh sách **có sẵn** (viết cứng trong `messages.py`). Admin có thể **thêm** tin nhắn riêng qua `/themtinnhan` — được lưu vào bảng `custom_messages`, rồi **gộp chung** với danh sách có sẵn mỗi khi bot chọn ngẫu nhiên (hàm `_get_combined()` trong `messages.py`). Tin nhắn có sẵn không bao giờ bị mất hay ghi đè, chỉ được mở rộng thêm.
+
+Chỉ admin mới thêm/xóa được (qua `/themtinnhan`, `/xoatinnhan`), tránh spam tin nhắn rác.
+
+---
+
+## 10. Fun Facts qua Gemini API
+
+4 mốc giờ cố định (`FACTS_TIMES`, mặc định 07:00, 11:30, 15:00, 21:00), gửi 1 fact vui về uống nước vào kênh — **độc lập hoàn toàn** với lịch nhắc uống nước (không kèm nút bấm, không cần phản hồi).
+
+**Cơ chế 2 lớp**:
+1. Nếu có cấu hình `GEMINI_API_KEY`, bot gọi Gemini API (model `gemini-3.5-flash`) sinh 1 fact mới mỗi lần
+2. Nếu **bất kỳ lỗi gì** xảy ra (chưa cấu hình key, sai key, mất mạng, hết quota,...) — bot tự động fallback về danh sách 8 fact tĩnh trong `messages.py` (`WATER_FACTS`), **không bao giờ** làm bot im lặng hay crash
+
+Lấy API key miễn phí tại: https://aistudio.google.com/app/apikey
+
+---
+
+## 11. Biến môi trường
 
 | Biến | Bắt buộc | Mặc định | Mô tả |
 |---|---|---|---|
-| `DISCORD_TOKEN` | ✅ | — | Token bot, lấy từ Discord Developer Portal |
-| `CHANNEL_ID` | ✅ | — | ID kênh Discord nơi bot gửi nhắc nhở |
-| `REMINDER_TIMES` | ❌ | `08:00,12:00,15:00,20:00` | Các mốc giờ nhắc nhở trong ngày, cách nhau bởi dấu phẩy |
-| `REMINDER_FOLLOWUP_MINUTES` | ❌ | `30` | Số phút chờ trước khi nhắc lại nếu chưa uống |
-| `TIMEZONE` | ❌ | `Asia/Ho_Chi_Minh` | Timezone dùng cho scheduler (APScheduler) |
-| `DATABASE_PATH` | ❌ | `water_reminder.db` | Đường dẫn file database. Production trỏ vào Volume, VD `/data/water_reminder.db` |
+| `DISCORD_TOKEN` | ✅ | — | Token bot |
+| `CHANNEL_ID` | ✅ | — | Kênh gửi nhắc nhở/fact |
+| `ADMIN_USER_IDS` | Khuyến nghị | (rỗng) | Danh sách User ID admin, cách nhau dấu phẩy |
+| `REMINDER_TIMES` | ❌ | `08:00,12:00,15:00,20:00` | Các mốc giờ nhắc chính |
+| `BUTTON_REMINDER_INTERVAL_MINUTES` | ❌ | `15` | Phút giữa các lần nhắc khi chưa bấm nút |
+| `BUTTON_REMINDER_MAX` | ❌ | `2` | Số lần nhắc lại tối đa (chuỗi "chưa bấm nút") |
+| `DRINK_CONFIRM_INTERVAL_MINUTES` | ❌ | `5` | Phút giữa các lần hỏi lại sau khi bấm "Chưa uống" |
+| `DRINK_CONFIRM_MAX` | ❌ | `2` | Số lần hỏi lại tối đa (chuỗi "chưa uống") |
+| `QUIET_HOUR` | ❌ | `22:30` | Giờ bắt đầu ngừng nhắc trong ngày |
+| `FACTS_TIMES` | ❌ | `07:00,11:30,15:00,21:00` | Các mốc giờ gửi fact |
+| `GEMINI_API_KEY` | ❌ | (rỗng) | Để trống thì luôn dùng fact tĩnh |
+| `TIMEZONE` | ❌ | `Asia/Ho_Chi_Minh` | Timezone cho scheduler |
+| `DATABASE_PATH` | ❌ | `water_reminder.db` | Đường dẫn DB. Production trỏ Volume, VD `/data/water_reminder.db` |
 
 ---
 
-## 8. Hướng dẫn cài đặt & chạy local
+## 12. Hướng dẫn cài đặt & chạy local
 
 ```bash
-# 1. Clone hoặc tải project về
 cd water-reminder-bot
-
-# 2. Tạo môi trường ảo
 python -m venv venv
 venv\Scripts\Activate.ps1        # Windows PowerShell
-# hoặc: source venv/bin/activate  # macOS/Linux
-
-# 3. Cài thư viện
 pip install -r requirements.txt
-
-# 4. Tạo file cấu hình
-copy .env.example .env           # Windows
-# hoặc: cp .env.example .env      # macOS/Linux
-# Sau đó điền DISCORD_TOKEN và CHANNEL_ID vào .env
-
-# 5. Chạy bot
+copy .env.example .env           # Điền đủ biến bắt buộc
 python bot.py
 ```
 
-Xem chi tiết từng bước (kể cả cách lấy Token, mời bot vào server) trong `README.md`.
+Chi tiết từng bước (lấy Token, mời bot vào server) xem `README.md`.
 
 ---
 
-## 9. Hướng dẫn deploy lên Railway
+## 13. Hướng dẫn deploy lên Railway
 
-1. Đẩy code lên GitHub repository (private khuyến nghị)
-2. Railway → **New Project** → **Deploy from GitHub repo** → chọn repo
-3. Railway tự nhận diện Python qua `requirements.txt` + `Procfile`
-4. Vào tab **Variables** → khai báo đầy đủ biến môi trường (mục 7), trừ `DATABASE_PATH` sẽ set sau khi tạo Volume
-5. Tạo **Volume**: `Ctrl+K` → tìm "volume" → tạo mới → **Mount Path** = `/data`
-6. Thêm biến `DATABASE_PATH=/data/water_reminder.db`
-7. Railway tự động build & deploy. Theo dõi tab **Deployments** tới khi trạng thái **Active**
+1. Đẩy code lên GitHub (private khuyến nghị)
+2. Railway → **New Project** → **Deploy from GitHub repo**
+3. Tab **Variables** → khai báo đủ biến môi trường (mục 11)
+4. Tạo **Volume**: `Ctrl+K` → "volume" → **Mount Path** = `/data`
+5. Thêm `DATABASE_PATH=/data/water_reminder.db`
+6. Theo dõi tab **Deployments** tới khi **Active**
 
-### Cơ chế CI/CD
-
-Mỗi lần `git push` lên nhánh `main`, Railway tự động nhận webhook từ GitHub, build lại image, và deploy bản mới — không cần thao tác thủ công nào thêm trên Railway.
+Mỗi lần `git push` lên `main`, Railway tự động build & deploy lại — không cần thao tác thủ công.
 
 ---
 
-## 10. Vận hành & bảo trì
+## 14. Vận hành & bảo trì
 
-### Cách cập nhật code
-
+### Cập nhật code
 ```bash
-# Sửa code local, test kỹ trước khi push
-python bot.py   # test local
-
 git add .
 git commit -m "Mô tả thay đổi"
 git push
 ```
+Theo dõi **View Logs**, xác nhận dòng cuối `Bot đã sẵn sàng: ...` và đúng số lượng slash command đồng bộ (hiện tại: **14**).
 
-Railway tự động build lại. Theo dõi tab **Deployments** → **View Logs** để xác nhận không lỗi, dòng cuối phải là `Bot đã sẵn sàng: ...`.
-
-### Cách xem dữ liệu thô (production)
-
-**Cách 1 — nhanh nhất, qua Discord:**
+### Xem dữ liệu thô (production)
 ```
 /xuatdata
 ```
-Bot gửi trực tiếp 2 file CSV, mở bằng Excel hoặc Google Sheets.
+hoặc qua Railway CLI: `railway volume files download /water_reminder.db ./backup.db` (cần SSH key: `ssh-keygen -t ed25519` → `railway ssh keys add`)
 
-**Cách 2 — qua Railway CLI (cho debug sâu):**
-```bash
-railway login
-railway link
-railway volume files download /water_reminder.db ./backup.db
+### Thông báo cập nhật cho người dùng
 ```
-Sau đó mở bằng **DB Browser for SQLite** để xem dạng bảng.
-
-### Cách thông báo cập nhật cho người dùng
-
-Sau khi deploy xong bản mới, admin server chạy:
+/thongbao <mô tả cập nhật>
 ```
-/thongbao Đã thêm tính năng streak và nhắc lại tự động!
-```
-Bot tự động đăng thông báo formatted, tag toàn bộ người đã `/dangky`.
 
-### Cách đăng lại hướng dẫn sử dụng
-
-Trong kênh `#huong-dan` (hoặc bất kỳ kênh nào), chạy:
+### Đăng lại hướng dẫn sử dụng
 ```
 /huongdan
 ```
 
+### ⚠️ Lưu ý khi sửa code liên quan tới scheduler
+
+Vì dùng **persistent job store**, các hàm được lên lịch (`send_water_reminder`, `check_no_response`, `check_drink_confirm`, `send_water_fact`) được APScheduler lưu tham chiếu **theo tên hàm**. Nếu đổi tên các hàm này, job cũ đang lưu trong DB (nếu có) có thể lỗi khi bot load lại lúc restart. Nên tránh đổi tên hàm đã lên lịch, hoặc nếu bắt buộc đổi, chấp nhận mất job đang treo (không ảnh hưởng dữ liệu chính).
+
 ---
 
-## 11. Xử lý sự cố thường gặp
+## 15. Xử lý sự cố thường gặp
 
 | Triệu chứng | Nguyên nhân thường gặp | Cách xử lý |
 |---|---|---|
-| `RuntimeError: Chưa cấu hình DISCORD_TOKEN` | Thiếu biến môi trường trên Railway | Vào tab Variables, thêm đủ `DISCORD_TOKEN`, `CHANNEL_ID` |
-| Bot không phản hồi slash command | Slash command chưa sync, hoặc bot đang crash loop | Xem log tab Deployments; đợi vài phút để Discord đồng bộ command |
-| Dữ liệu mất sau khi deploy | Chưa gắn Volume, hoặc `DATABASE_PATH` chưa trỏ đúng | Kiểm tra Volume đã mount `/data`, biến `DATABASE_PATH=/data/water_reminder.db` |
-| Log/dữ liệu bị lệch giờ | Server chạy ở múi giờ khác VN (thường là UTC) | Đã xử lý ở code (mục 5) — mọi phép tính ngày/giờ đều tự quy đổi qua `_vn_now()`, không phụ thuộc múi giờ server |
-| `git` không nhận lệnh trong PowerShell | Chưa cài Git, hoặc cài xong chưa mở lại terminal | Cài Git for Windows, đóng terminal cũ, mở terminal mới |
-| `railway volume files download` báo lỗi SSH | Chưa có SSH key đăng ký với Railway | `ssh-keygen -t ed25519` → `railway ssh keys add` |
-| Slash command bị đếm sai số lượng khi sync | File `bot.py`/`database.py` bị dán trùng lặp nội dung khi copy thủ công | Xóa sạch nội dung file, dán lại 1 lần duy nhất, kiểm tra bằng cách đếm số `@bot.tree.command` trong file |
+| `RuntimeError: Chưa cấu hình DISCORD_TOKEN` | Thiếu biến môi trường trên Railway | Vào tab Variables, thêm đủ biến bắt buộc |
+| Bot không phản hồi slash command | Chưa sync, hoặc Discord client cache cũ | Xem log; thử `Ctrl+R` hoặc restart Discord client |
+| Dữ liệu mất sau khi deploy | Chưa gắn Volume, hoặc `DATABASE_PATH` sai | Kiểm tra Volume mount `/data`, biến `DATABASE_PATH` đúng |
+| Log/dữ liệu lệch giờ | Server chạy múi giờ khác VN | Đã xử lý qua `_vn_now()`/`vn_now()`, không phụ thuộc server |
+| `git` không nhận lệnh | Chưa cài Git, hoặc chưa mở lại terminal | Cài Git for Windows, mở terminal mới |
+| `railway volume files download` lỗi SSH | Chưa có SSH key đăng ký | `ssh-keygen -t ed25519` → `railway ssh keys add` |
+| Slash command bị đếm sai số lượng | File bị dán trùng lặp khi copy thủ công | Xóa sạch, dán lại 1 lần, đếm `@bot.tree.command` để xác nhận |
+| `/thongbao`, `/themtinnhan`,... báo "chỉ dành cho admin" dù đúng là admin | `ADMIN_USER_IDS` chưa khai báo trên Railway, hoặc sai ID | Kiểm tra tab Variables, đối chiếu đúng User ID |
+| Fact luôn chỉ ra 1 trong 8 câu cũ, không đổi mới | Gemini API lỗi hoặc chưa cấu hình key | Xem log tìm dòng `Gọi Gemini API lỗi...`, kiểm tra `GEMINI_API_KEY` |
+| Bot vẫn nhắc sau giờ đã đặt `QUIET_HOUR` | Biến chưa được thêm trên Railway (đang dùng mặc định 22:30) | Kiểm tra tab Variables |
 
 ---
 
-## 12. Lịch sử phát triển (Changelog)
+## 16. Lịch sử phát triển (Changelog)
 
 ### v1.0 — MVP
-- Nhắc nhở theo giờ cố định, nút ✅/⏳
-- Lưu log SQLite, 1 người dùng cố định (`TARGET_USER_ID`)
+Nhắc theo giờ cố định, nút ✅/⏳, 1 người dùng cố định.
 
 ### v1.1 — Multi-user
-- Chuyển sang mô hình đăng ký `/dangky` / `/huy`, hỗ trợ nhiều người dùng chung 1 kênh
+`/dangky` / `/huy`, nhiều người dùng chung 1 bot.
 
 ### v1.2 — Deploy production
-- Deploy lên Railway, gắn Volume lưu trữ bền vững
-- Thêm `DATABASE_PATH` để hỗ trợ đường dẫn tùy chỉnh theo môi trường
+Railway + Volume lưu trữ bền vững, `DATABASE_PATH` tùy chỉnh.
 
-### v1.3 — Streak & nhắc lại
-- Thêm `get_streak()` — tính chuỗi ngày liên tục uống nước
-- Thêm cơ chế tự động nhắc lại (`REMINDER_FOLLOWUP_MINUTES`) nếu chưa uống sau khoảng thời gian quy định
-- Thêm lệnh `/streak`
+### v1.3 — Streak & nhắc lại (bản đầu)
+`get_streak()`, cơ chế nhắc lại đơn giản (1 lần duy nhất).
 
 ### v1.4 — Xuất dữ liệu
-- Thêm lệnh `/xuatdata`, xuất CSV trực tiếp qua Discord, không cần Railway CLI
+`/xuatdata` — CSV qua Discord.
 
 ### v1.5 — Sửa lỗi múi giờ
-- Toàn bộ phép tính ngày/giờ (streak, thống kê, log hiển thị, lịch nhắc lại) chuyển sang tính dựa trên UTC + 7h, không phụ thuộc múi giờ hệ thống server
+Toàn bộ phép tính ngày/giờ chuyển sang tính dựa trên UTC+7, không phụ thuộc server.
 
 ### v1.6 — Vận hành & tài liệu
-- Thêm `/huongdan`, `/thongbao`
-- Bổ sung tài liệu kỹ thuật đầy đủ (file này)
+`/huongdan`, `/thongbao`, tài liệu kỹ thuật đầy đủ đầu tiên.
+
+### v2.0 — Nâng cấp lớn: Admin, Reminder Cycle, Custom Messages, Facts
+- **Phân quyền Admin riêng** (`ADMIN_USER_IDS`), độc lập role Discord
+- **Viết lại hoàn toàn logic nhắc nhở** thành chu kỳ 2 nhánh (chưa bấm nút / đã bấm chưa uống), giới hạn số lần lặp, có giờ im lặng (`QUIET_HOUR`)
+- Scheduler chuyển sang **persistent job store** (APScheduler + SQLAlchemyJobStore) — sống sót qua bot restart
+- **Custom messages**: admin thêm/xem/xóa tin nhắn tùy chỉnh (`/themtinnhan`, `/xemtinnhan`, `/xoatinnhan`), gộp với danh sách có sẵn
+- **Fun facts** 4 lần/ngày qua Gemini API, có fallback tĩnh (`/testfact` để test nhanh)
 
 ---
 
-## 13. Hướng phát triển tiếp theo
+## 17. Hướng phát triển tiếp theo
 
-Các ý tưởng đã được đề xuất, chưa triển khai:
-
-- **Mục tiêu số ly/ngày**: cho phép người dùng tự đặt mục tiêu, xem % hoàn thành
-- **Mood check-in đầy đủ**: bảng `mood_checkins` đã có sẵn schema nhưng chưa có command sử dụng
-- **Bảng xếp hạng (leaderboard)**: so sánh streak giữa các người dùng trong server, tạo động lực
-- **Nhắc nhở thông minh hơn**: học thói quen người dùng để điều chỉnh giờ nhắc tối ưu
+- **Mục tiêu số ly/ngày**: tự đặt mục tiêu, xem % hoàn thành
+- **Mood check-in đầy đủ**: bảng `mood_checkins` đã có schema, chưa có command
+- **Bảng xếp hạng (leaderboard)**: so sánh streak giữa người dùng
+- **Nhắc nhở thông minh hơn**: học thói quen người dùng để tối ưu giờ nhắc
 
 ---
 
-*Tài liệu này nên được cập nhật song song mỗi khi có thay đổi lớn về code hoặc kiến trúc, để luôn phản ánh đúng trạng thái thực tế của dự án.*
+*Tài liệu này nên được cập nhật song song mỗi khi có thay đổi lớn về code hoặc kiến trúc.*

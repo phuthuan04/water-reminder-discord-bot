@@ -1,6 +1,6 @@
-# 💧 Water Reminder Bot
+# 💧 Water Reminder Bot (Stay Hydrated!)
 
-Chatbot Discord nhắc người yêu uống nước, hỏi thăm sức khỏe, lưu lịch sử và vẽ biểu đồ thống kê.
+Chatbot Discord nhắc uống nước, hỏi thăm sức khỏe, theo dõi streak, gửi fact vui, và hỗ trợ nhiều người dùng chung 1 bot.
 
 ## 📁 Cấu trúc project
 
@@ -8,42 +8,44 @@ Chatbot Discord nhắc người yêu uống nước, hỏi thăm sức khỏe, l
 water-reminder-bot/
 ├── bot.py           # File chính, chạy bot
 ├── database.py       # Xử lý lưu trữ dữ liệu (SQLite)
-├── messages.py        # Kho tin nhắn nhắc nhở / hỏi thăm / khen
-├── requirements.txt   # Danh sách thư viện cần cài
-├── .env.example       # Mẫu file cấu hình
-└── README.md
+├── messages.py         # Kho tin nhắn nhắc nhở / hỏi thăm / khen / fact
+├── requirements.txt     # Danh sách thư viện cần cài
+├── .env.example           # Mẫu file cấu hình
+├── Procfile                 # Lệnh chạy cho Railway
+├── README.md                 # File này - hướng dẫn setup nhanh
+└── DOCUMENTATION.md            # Tài liệu kỹ thuật đầy đủ (kiến trúc, schema, troubleshooting...)
 ```
 
 ## 🚀 Bước 1: Tạo Discord Bot
 
 1. Vào https://discord.com/developers/applications → **New Application** → đặt tên bất kỳ (VD: "Water Reminder")
-2. Vào tab **Bot** (menu bên trái) → **Reset Token** → copy token này lại (chỉ hiện 1 lần, mất phải reset lại)
-3. Trong tab **Bot**, kéo xuống mục **Privileged Gateway Intents** → **không cần bật gì** thêm (bot này không đọc nội dung tin nhắn)
+2. Vào tab **Bot** → **Reset Token** → copy token này lại (chỉ hiện 1 lần)
+3. Trong tab **Bot**, mục **Privileged Gateway Intents** → **không cần bật gì** thêm
 4. Vào tab **OAuth2 → URL Generator**:
-   - Ở mục **Scopes**: tick `bot` và `applications.commands`
-   - Ở mục **Bot Permissions**: tick `Send Messages`, `Embed Links`, `Attach Files`, `Use Slash Commands`
-   - Copy URL được sinh ra ở cuối trang, dán vào trình duyệt, chọn server của bạn để mời bot vào
+   - **Scopes**: tick `bot` và `applications.commands`
+   - **Bot Permissions**: tick `Send Messages`, `Embed Links`, `Attach Files`, `Use Slash Commands`
+   - Copy URL sinh ra ở cuối trang, dán vào trình duyệt, chọn server để mời bot vào
 
 ## 🚀 Bước 2: Lấy Channel ID và User ID
 
-1. Vào Discord → **Cài đặt người dùng → Nâng cao → bật "Chế độ nhà phát triển" (Developer Mode)**
+1. Discord → **Cài đặt người dùng → Nâng cao → bật "Chế độ nhà phát triển"**
 2. Chuột phải vào kênh muốn bot gửi tin nhắn → **Copy Channel ID**
-3. Chuột phải vào avatar người yêu bạn → **Copy User ID**
+3. Chuột phải vào avatar của bạn → **Copy User ID** (để làm admin, xem Bước 3)
 
 ## 🚀 Bước 3: Cài đặt project
 
 ```bash
-# Cài thư viện
 pip install -r requirements.txt
-
-# Tạo file cấu hình từ mẫu
-cp .env.example .env
+cp .env.example .env      # macOS/Linux
+copy .env.example .env    # Windows PowerShell
 ```
 
-Mở file `.env` vừa tạo, điền:
-- `DISCORD_TOKEN`: token lấy ở Bước 1
-- `CHANNEL_ID`: channel ID lấy ở Bước 2
-- `REMINDER_TIMES`: tùy chỉnh giờ nhắc nếu muốn (mặc định đã có sẵn 6 mốc/ngày)
+Mở file `.env`, điền các biến **bắt buộc**:
+- `DISCORD_TOKEN` — token lấy ở Bước 1
+- `CHANNEL_ID` — channel ID lấy ở Bước 2
+- `ADMIN_USER_IDS` — User ID của bạn (từ Bước 2), để dùng các lệnh quản trị
+
+Các biến còn lại đều có giá trị mặc định hợp lý, xem đầy đủ trong `.env.example` hoặc mục Biến môi trường trong `DOCUMENTATION.md`.
 
 ## 🚀 Bước 4: Chạy bot
 
@@ -51,36 +53,30 @@ Mở file `.env` vừa tạo, điền:
 python bot.py
 ```
 
-Nếu thấy log `Bot đã sẵn sàng: <tên bot>#xxxx` là thành công! Bot đã chạy, nhưng **chưa nhắc ai cả** cho tới khi có người `/dangky` (xem bên dưới).
+Thấy log `Bot đã sẵn sàng: <tên bot>#xxxx` là thành công. Bot chưa nhắc ai cả cho tới khi có người gõ `/dangky`.
 
-## 🎮 Các lệnh có sẵn (slash commands)
+## 🎮 Danh sách lệnh (tóm tắt — xem đầy đủ trong DOCUMENTATION.md)
 
-| Lệnh | Chức năng |
-|---|---|
-| `/dangky` | Đăng ký nhận nhắc nhở uống nước - **bắt buộc làm trước tiên** |
-| `/huy` | Ngừng nhận nhắc nhở (lịch sử uống nước vẫn được giữ) |
-| `/uong` | Ghi nhận thủ công 1 lần đã uống nước (không cần đợi bot nhắc) |
-| `/homnay` | Xem đã uống nước bao nhiêu lần trong hôm nay |
-| `/thongke` | Vẽ biểu đồ số lần uống nước 7 ngày gần nhất |
-| `/test` | Gửi thử tin nhắn nhắc nhở ngay lập tức, không cần đợi tới giờ |
-| `/streak` | Xem chuỗi ngày uống nước liên tục |
+| Lệnh | Ai dùng | Mô tả |
+|---|---|---|
+| `/dangky` | Mọi người | Đăng ký nhận nhắc nhở — làm trước tiên |
+| `/huy` | Mọi người | Ngừng nhận nhắc nhở |
+| `/uong` | Mọi người | Ghi nhận thủ công 1 lần uống nước |
+| `/homnay` | Mọi người | Xem số lần uống hôm nay + streak |
+| `/streak` | Mọi người | Xem chuỗi ngày uống nước liên tục |
+| `/thongke` | Mọi người | Biểu đồ 7 ngày gần nhất |
+| `/xuatdata` | Mọi người | Xuất dữ liệu thô ra CSV |
+| `/huongdan` | Mọi người | Đăng hướng dẫn sử dụng vào kênh |
+| `/test`, `/testfact` | Mọi người | Test nhanh reminder/fact, không cần đợi tới giờ |
+| `/thongbao` | **Admin** | Đăng thông báo cập nhật |
+| `/themtinnhan`, `/xemtinnhan`, `/xoatinnhan` | **Admin** | Quản lý tin nhắn tùy chỉnh |
 
-Khi bot gửi tin nhắn nhắc nhở, sẽ có 2 nút **✅ Đã uống** / **⏳ Chưa uống** để bấm trực tiếp.
-
-**Tính năng nhắc lại**: nếu sau `REMINDER_FOLLOWUP_MINUTES` phút (mặc định 30) kể từ lúc bot nhắc, người dùng vẫn chưa uống thêm lần nào, bot sẽ tự động nhắc lại 1 lần nữa trong cùng kênh.
-
-**Tính năng streak**: chuỗi ngày uống nước liên tục sẽ tự động hiện kèm mỗi khi bạn bấm nút ✅ hoặc gõ `/homnay`. Streak không bị mất chỉ vì hôm nay chưa kịp uống - chỉ đứt khi bỏ lỡ nguyên 1 ngày trở lên.
-
-**Mô hình nhiều người dùng chung 1 bot**: bot này hỗ trợ nhiều người cùng đăng ký trong 1 kênh (VD: bạn dùng trước, sau này mời người yêu vào server, họ chỉ cần tự gõ `/dangky` là được nhắc nhở luôn — không cần sửa code hay `.env` gì cả).
+Khi bot nhắc nhở, có 2 nút **✅ Đã uống** / **⏳ Chưa uống**. Nếu không phản hồi, bot tự nhắc lại theo chu kỳ (xem `DOCUMENTATION.md` mục Reminder Cycle) cho tới 22h30 thì ngừng hẳn trong ngày.
 
 ## ⚠️ Lưu ý về hosting
 
-Bot này cần chạy **liên tục 24/7** (không dùng được hosting serverless như Vercel).
-Gợi ý: deploy lên **Railway** (dễ nhất) hoặc **Oracle Cloud Free Tier** (free vĩnh viễn nhưng cần tự setup VPS).
-Mình có thể hướng dẫn chi tiết bước deploy khi bạn code chạy ổn ở local rồi.
+Bot cần chạy **liên tục 24/7**, không dùng được hosting serverless. Xem hướng dẫn deploy Railway chi tiết trong `DOCUMENTATION.md`.
 
 ## 🔧 Troubleshooting nhanh
 
-- **Lỗi "Improper token"**: token trong `.env` bị sai hoặc dính khoảng trắng thừa
-- **Slash command không hiện trong Discord**: đợi vài phút để Discord đồng bộ, hoặc thử `Ctrl+R` reload Discord
-- **Bot online nhưng không gửi tin nhắn nhắc nhở đúng giờ**: kiểm tra lại `TIMEZONE` và `REMINDER_TIMES` trong `.env`, đảm bảo giờ hệ thống server đúng
+Xem bảng troubleshooting đầy đủ trong `DOCUMENTATION.md` — bao gồm các lỗi thực tế đã gặp: thiếu env var, mất dữ liệu khi redeploy, lệch múi giờ, SSH key Railway CLI, v.v.
