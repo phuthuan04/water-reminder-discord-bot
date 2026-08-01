@@ -468,6 +468,12 @@ async def test_reminder(interaction: discord.Interaction):
     await send_water_reminder()
 
 
+@bot.tree.command(name="testfact", description="[Test] Gửi thử 1 fact vui về uống nước ngay lập tức")
+async def testfact(interaction: discord.Interaction):
+    await interaction.response.send_message("Đang gửi thử fact... ⏳", ephemeral=True)
+    await send_water_fact()
+
+
 @bot.tree.command(name="xuatdata", description="Xuất toàn bộ dữ liệu thô ra file CSV")
 async def xuatdata(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
