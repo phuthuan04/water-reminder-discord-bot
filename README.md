@@ -1,6 +1,7 @@
 # 💧 Water Reminder Bot (Stay Hydrated!)
 
 Chatbot Discord nhắc uống nước, hỏi thăm sức khỏe, theo dõi streak, gửi fact vui, và hỗ trợ nhiều người dùng chung 1 bot.
+
 > HCMC, July 30th, 2026
 > 
 > 💌 **Chatbot này được viết ra dành cho Khánh Đan.**
@@ -89,3 +90,7 @@ Bot cần chạy **liên tục 24/7**, không dùng được hosting serverless.
 ## 🔧 Troubleshooting nhanh
 
 Xem bảng troubleshooting đầy đủ trong `DOCUMENTATION.md` — bao gồm các lỗi thực tế đã gặp: thiếu env var, mất dữ liệu khi redeploy, lệch múi giờ, SSH key Railway CLI, v.v.
+
+## 📜 Lịch sử cập nhật
+
+Toàn bộ thay đổi qua từng phiên bản, kèm ngày tháng cụ thể, được ghi lại tại mục **Changelog** trong `DOCUMENTATION.md`.

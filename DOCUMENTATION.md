@@ -4,7 +4,7 @@
 **Ngôn ngữ:** Python 3.11
 **Trạng thái:** Đang vận hành (Production)
 **Nền tảng deploy:** Railway
-**Cập nhật lần cuối:** 01/08/2026
+**Cập nhật lần cuối:** 01/08/2026 (xem chi tiết từng thay đổi tại [mục 16 - Changelog](#16-lịch-sử-phát-triển-changelog))
 
 ---
 
@@ -363,33 +363,38 @@ Vì dùng **persistent job store**, các hàm được lên lịch (`send_water_
 
 ## 16. Lịch sử phát triển (Changelog)
 
-### v1.0 — MVP
+### v1.0 — MVP (30/07/2026)
 Nhắc theo giờ cố định, nút ✅/⏳, 1 người dùng cố định.
 
-### v1.1 — Multi-user
+### v1.1 — Multi-user (30/07/2026)
 `/dangky` / `/huy`, nhiều người dùng chung 1 bot.
 
-### v1.2 — Deploy production
+### v1.2 — Deploy production (30/07/2026)
 Railway + Volume lưu trữ bền vững, `DATABASE_PATH` tùy chỉnh.
 
-### v1.3 — Streak & nhắc lại (bản đầu)
+### v1.3 — Streak & nhắc lại (bản đầu) (30/07/2026)
 `get_streak()`, cơ chế nhắc lại đơn giản (1 lần duy nhất).
 
-### v1.4 — Xuất dữ liệu
+### v1.4 — Xuất dữ liệu (30/07/2026)
 `/xuatdata` — CSV qua Discord.
 
-### v1.5 — Sửa lỗi múi giờ
+### v1.5 — Sửa lỗi múi giờ (30/07/2026)
 Toàn bộ phép tính ngày/giờ chuyển sang tính dựa trên UTC+7, không phụ thuộc server.
 
-### v1.6 — Vận hành & tài liệu
+### v1.6 — Vận hành & tài liệu (30/07/2026)
 `/huongdan`, `/thongbao`, tài liệu kỹ thuật đầy đủ đầu tiên.
 
-### v2.0 — Nâng cấp lớn: Admin, Reminder Cycle, Custom Messages, Facts
+### v2.0 — Nâng cấp lớn: Admin, Reminder Cycle, Custom Messages, Facts (01/08/2026)
 - **Phân quyền Admin riêng** (`ADMIN_USER_IDS`), độc lập role Discord
 - **Viết lại hoàn toàn logic nhắc nhở** thành chu kỳ 2 nhánh (chưa bấm nút / đã bấm chưa uống), giới hạn số lần lặp, có giờ im lặng (`QUIET_HOUR`)
 - Scheduler chuyển sang **persistent job store** (APScheduler + SQLAlchemyJobStore) — sống sót qua bot restart
 - **Custom messages**: admin thêm/xem/xóa tin nhắn tùy chỉnh (`/themtinnhan`, `/xemtinnhan`, `/xoatinnhan`), gộp với danh sách có sẵn
 - **Fun facts** 4 lần/ngày qua Gemini API, có fallback tĩnh (`/testfact` để test nhanh)
+
+### v2.1 — Tùy chỉnh prompt & lời nhắn cá nhân (01/08/2026)
+- Chuyển prompt sinh fact ra biến môi trường `PROMPT_FACT` — đổi giọng điệu/chủ đề facts trực tiếp trên Railway, không cần sửa code hay deploy lại
+- Thêm lời nhắn dành riêng cho Khánh Đan vào đầu `README.md` và `DOCUMENTATION.md`
+- Bắt đầu áp dụng quy ước ghi ngày tháng cho mọi entry trong Changelog từ nay về sau
 
 ---
 
