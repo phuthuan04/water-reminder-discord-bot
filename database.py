@@ -62,6 +62,17 @@ class CustomMessage(Base):
     added_by = Column(String, nullable=True)  # Discord user ID người thêm
 
 
+class ChatHistory(Base):
+    """Lịch sử trò chuyện @bot của từng người, lưu riêng theo user_id (không chung theo kênh)."""
+    __tablename__ = "chat_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # "user" hoặc "model"
+    content = Column(String, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+
 def init_db():
     """Tạo bảng nếu chưa tồn tại. Gọi 1 lần khi bot khởi động."""
     Base.metadata.create_all(engine)
@@ -323,5 +334,38 @@ def get_custom_messages(category: str) -> list:
     try:
         rows = session.query(CustomMessage).filter(CustomMessage.category == category).all()
         return [(r.id, r.content) for r in rows]
+    finally:
+        session.close()
+
+
+# ---------- Lịch sử trò chuyện (chat_history) ----------
+
+def add_chat_message(user_id: str, role: str, content: str):
+    """Lưu 1 tin nhắn (của user hoặc của bot) vào lịch sử."""
+    session = SessionLocal()
+    try:
+        entry = ChatHistory(user_id=str(user_id), role=role, content=content, timestamp=datetime.utcnow())
+        session.add(entry)
+        session.commit()
+    finally:
+        session.close()
+
+
+def get_chat_history(user_id: str, limit: int = 20) -> list:
+    """
+    Trả về [(role, content), ...] của N tin gần nhất, theo thứ tự CŨ -> MỚI
+    (đúng thứ tự cần để gửi cho Gemini làm ngữ cảnh hội thoại).
+    """
+    session = SessionLocal()
+    try:
+        rows = (
+            session.query(ChatHistory)
+            .filter(ChatHistory.user_id == str(user_id))
+            .order_by(ChatHistory.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+        rows.reverse()
+        return [(r.role, r.content) for r in rows]
     finally:
         session.close()

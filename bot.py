@@ -31,6 +31,7 @@ import matplotlib.pyplot as plt
 
 import database as db
 import messages as msg
+import chat
 
 # ---------- Cấu hình & logging ----------
 load_dotenv()
@@ -87,7 +88,7 @@ if not DISCORD_TOKEN:
 
 # ---------- Khởi tạo bot ----------
 intents = discord.Intents.default()
-intents.message_content = False  # không cần đọc nội dung tin nhắn, chỉ dùng slash command + button
+intents.message_content = True  # cần bật để đọc nội dung tin nhắn khi người dùng @mention bot để trò chuyện
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -354,7 +355,7 @@ async def send_water_fact():
         return
 
     fact = await get_water_fact()
-    await channel.send(f"💡 **Fun Fact:**\n{fact}")
+    await channel.send(f"💡 **Fact vui về nước:**\n{fact}")
     log.info("Đã gửi fact lúc %s", vn_now().strftime("%H:%M:%S"))
 
 
@@ -392,6 +393,30 @@ def setup_scheduler():
 
 
 # ---------- Sự kiện bot ----------
+@bot.event
+async def on_message(message: discord.Message):
+    # Bỏ qua tin nhắn từ bot khác (kể cả chính mình), tránh vòng lặp vô hạn
+    if message.author.bot:
+        return
+
+    if bot.user in message.mentions:
+        content = message.content
+        for mention_tag in (f"<@{bot.user.id}>", f"<@!{bot.user.id}>"):
+            content = content.replace(mention_tag, "")
+        content = content.strip()
+
+        if not content:
+            await message.reply("Bạn muốn nói gì với mình nè? 😊")
+        else:
+            async with message.channel.typing():
+                reply = await chat.get_chat_response(str(message.author.id), content)
+            await message.reply(reply[:2000])  # Discord giới hạn 2000 ký tự/tin nhắn
+
+    # Bắt buộc phải gọi dòng này khi đã tự định nghĩa on_message,
+    # nếu không các lệnh dùng prefix "!" (nếu có) sẽ ngừng hoạt động.
+    await bot.process_commands(message)
+
+
 @bot.event
 async def on_ready():
     db.init_db()

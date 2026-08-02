@@ -4,19 +4,13 @@
 **Ngôn ngữ:** Python 3.11
 **Trạng thái:** Đang vận hành (Production)
 **Nền tảng deploy:** Railway
-**Cập nhật lần cuối:** 01/08/2026 (xem chi tiết từng thay đổi tại [mục 16 - Changelog](#16-lịch-sử-phát-triển-changelog))
+**Cập nhật lần cuối:** 02/08/2026 (xem chi tiết từng thay đổi tại [mục 17 - Changelog](#17-lịch-sử-phát-triển-changelog))
 
 ---
 
-> HCMC, July 30th, 2026
-> 
-> 💌 **Chatbot này được viết ra dành cho Khánh Đan.**
-> 
-> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé. Anh luôn quân tâm em. Anh yêu em.
-> 
+> 💌 **Chatbot này dành cho Khánh Đan, người yêu của anh.**
+> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé. Anh yêu em.
 > — *phuthuan04*
-> 
-> *Will be updated frequently*
 
 ---
 
@@ -32,13 +26,14 @@
 8. [Chu kỳ nhắc nhở (Reminder Cycle)](#8-chu-kỳ-nhắc-nhở-reminder-cycle)
 9. [Tin nhắn tùy chỉnh (Custom Messages)](#9-tin-nhắn-tùy-chỉnh-custom-messages)
 10. [Fun Facts qua Gemini API](#10-fun-facts-qua-gemini-api)
-11. [Biến môi trường](#11-biến-môi-trường)
-12. [Hướng dẫn cài đặt & chạy local](#12-hướng-dẫn-cài-đặt--chạy-local)
-13. [Hướng dẫn deploy lên Railway](#13-hướng-dẫn-deploy-lên-railway)
-14. [Vận hành & bảo trì](#14-vận-hành--bảo-trì)
-15. [Xử lý sự cố thường gặp](#15-xử-lý-sự-cố-thường-gặp)
-16. [Lịch sử phát triển (Changelog)](#16-lịch-sử-phát-triển-changelog)
-17. [Hướng phát triển tiếp theo](#17-hướng-phát-triển-tiếp-theo)
+11. [Trò chuyện qua @mention (Giai đoạn A)](#11-trò-chuyện-qua-mention-giai-đoạn-a)
+12. [Biến môi trường](#12-biến-môi-trường)
+13. [Hướng dẫn cài đặt & chạy local](#13-hướng-dẫn-cài-đặt--chạy-local)
+14. [Hướng dẫn deploy lên Railway](#14-hướng-dẫn-deploy-lên-railway)
+15. [Vận hành & bảo trì](#15-vận-hành--bảo-trì)
+16. [Xử lý sự cố thường gặp](#16-xử-lý-sự-cố-thường-gặp)
+17. [Lịch sử phát triển (Changelog)](#17-lịch-sử-phát-triển-changelog)
+18. [Hướng phát triển tiếp theo](#18-hướng-phát-triển-tiếp-theo)
 
 ---
 
@@ -114,9 +109,10 @@
 
 ```
 water-reminder-bot/
-├── bot.py                # Entry point - command, scheduler, chu kỳ nhắc, view
-├── database.py            # Model + CRUD (users, water_logs, custom_messages, mood_checkins)
-├── messages.py              # Kho tin nhắn (nhắc nhở, khen, hỏi thăm, nhắc lại, fact tĩnh)
+├── bot.py                # Entry point - command, scheduler, chu kỳ nhắc, view, on_message
+├── database.py            # Model + CRUD (users, water_logs, custom_messages, mood_checkins, chat_history)
+├── chat.py                  # Logic trò chuyện @mention: ngữ cảnh, gọi Gemini, lưu lịch sử
+├── messages.py                # Kho tin nhắn (nhắc nhở, khen, hỏi thăm, nhắc lại, fact tĩnh)
 ├── requirements.txt          # Thư viện Python
 ├── .env.example                # Mẫu cấu hình
 ├── .env                         # Cấu hình thật (KHÔNG commit)
@@ -161,6 +157,15 @@ Engine: SQLite, đường dẫn qua `DATABASE_PATH`. Dùng chung file với **AP
 | `user_id` | String | |
 | `timestamp` | DateTime | |
 | `note` | String, nullable | Dự phòng, chưa có command sử dụng |
+
+### `chat_history`
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| `id` | Integer (PK) | |
+| `user_id` | String | Lưu riêng theo từng người, không chung theo kênh |
+| `role` | String | `user` hoặc `model` |
+| `content` | String | Nội dung tin nhắn gốc (không kèm data context được chèn lúc gọi API) |
+| `timestamp` | DateTime | UTC |
 
 ### Quy ước về thời gian
 
@@ -263,7 +268,39 @@ Lấy API key miễn phí tại: https://aistudio.google.com/app/apikey
 
 ---
 
-## 11. Biến môi trường
+## 11. Trò chuyện qua @mention (Giai đoạn A)
+
+### Cách hoạt động
+
+Tag `@Tên bot` kèm nội dung trong bất kỳ kênh nào bot có mặt → bot đọc lịch sử chat gần đây (riêng theo từng người, không lẫn giữa nhiều người) + dữ liệu uống nước thật của người đó → gọi Gemini trả lời có ngữ cảnh.
+
+**Phạm vi Giai đoạn A**: chỉ trò chuyện, tư vấn, đưa insight dựa trên dữ liệu thật. **Chưa** tự thực thi hành động (VD ghi nhận uống nước qua chat) — dự kiến bổ sung ở Giai đoạn B (log nước) và Giai đoạn C (đăng ký/hủy, có xác nhận), dùng cơ chế function calling của Gemini.
+
+### Yêu cầu cấu hình bắt buộc
+
+Tính năng này cần đọc được **nội dung tin nhắn** — quyền này mặc định tắt (bot trước giờ chỉ dùng slash command + nút bấm). Cần bật ở **2 nơi**:
+1. **Discord Developer Portal** → app của bot → tab **Bot** → mục **Privileged Gateway Intents** → bật **Message Content Intent**
+2. Trong code: `intents.message_content = True` (đã cập nhật sẵn trong `bot.py`)
+
+Thiếu bước 1 (bật trên Developer Portal) sẽ khiến bot không nhận được nội dung tin nhắn dù code đã đúng.
+
+### Kiến trúc
+
+File `chat.py` (mới, tách riêng khỏi `bot.py`) đảm nhiệm: xây dựng ngữ cảnh (ghép lịch sử chat + số liệu uống nước thật), gọi Gemini, lưu lại lịch sử mới vào bảng `chat_history`. `bot.py` chỉ lo phần orchestration (bắt sự kiện `on_message`, kiểm tra có bị @mention không, gọi `chat.get_chat_response()`, gửi phản hồi).
+
+**Ngữ cảnh gửi cho Gemini mỗi lượt** gồm:
+- Lịch sử tối đa `CHAT_HISTORY_LIMIT` tin gần nhất (mặc định 20), lưu riêng theo `user_id`
+- Số liệu thật: số lần uống nước hôm nay, streak, thống kê 7 ngày — chèn kèm ngay trước tin nhắn của người dùng ở mỗi lượt, để Gemini luôn có số liệu mới nhất mà không cần lưu lặp lại trong lịch sử
+
+**Cơ chế an toàn**: giống các tính năng Gemini khác trong bot (facts), mọi lỗi (chưa cấu hình key, sai key, mất mạng, lỗi API,...) đều được bắt gọn, trả về 1 câu xin lỗi thân thiện thay vì crash. Khi lỗi xảy ra, tin nhắn KHÔNG được lưu vào lịch sử (tránh lưu rác/lặp lại lỗi ở lượt sau).
+
+### Tùy chỉnh system prompt
+
+Biến `PROMPT_CHAT` (giống cách `PROMPT_FACT` hoạt động) — để trống thì dùng prompt mặc định viết sẵn trong `chat.py` (định nghĩa tính cách, giới hạn phạm vi trả lời, quy tắc dùng số liệu thật). Đổi trực tiếp trên Railway, không cần sửa code.
+
+---
+
+## 12. Biến môi trường
 
 | Biến | Bắt buộc | Mặc định | Mô tả |
 |---|---|---|---|
@@ -279,12 +316,14 @@ Lấy API key miễn phí tại: https://aistudio.google.com/app/apikey
 | `FACTS_TIMES` | ❌ | `07:00,11:30,15:00,21:00` | Các mốc giờ gửi fact |
 | `GEMINI_API_KEY` | ❌ | (rỗng) | Để trống thì luôn dùng fact tĩnh |
 | `PROMPT_FACT` | ❌ | (prompt mặc định trong code) | Prompt gửi cho Gemini - đổi trực tiếp trên Railway, không cần sửa code/deploy lại |
+| `CHAT_HISTORY_LIMIT` | ❌ | `20` | Số tin nhắn gần nhất giữ làm ngữ cảnh trò chuyện, mỗi người riêng |
+| `PROMPT_CHAT` | ❌ | (prompt mặc định trong `chat.py`) | System prompt cho tính năng trò chuyện @mention |
 | `TIMEZONE` | ❌ | `Asia/Ho_Chi_Minh` | Timezone cho scheduler |
 | `DATABASE_PATH` | ❌ | `water_reminder.db` | Đường dẫn DB. Production trỏ Volume, VD `/data/water_reminder.db` |
 
 ---
 
-## 12. Hướng dẫn cài đặt & chạy local
+## 13. Hướng dẫn cài đặt & chạy local
 
 ```bash
 cd water-reminder-bot
@@ -299,7 +338,7 @@ Chi tiết từng bước (lấy Token, mời bot vào server) xem `README.md`.
 
 ---
 
-## 13. Hướng dẫn deploy lên Railway
+## 14. Hướng dẫn deploy lên Railway
 
 1. Đẩy code lên GitHub (private khuyến nghị)
 2. Railway → **New Project** → **Deploy from GitHub repo**
@@ -312,7 +351,7 @@ Mỗi lần `git push` lên `main`, Railway tự động build & deploy lại �
 
 ---
 
-## 14. Vận hành & bảo trì
+## 15. Vận hành & bảo trì
 
 ### Cập nhật code
 ```bash
@@ -344,7 +383,7 @@ Vì dùng **persistent job store**, các hàm được lên lịch (`send_water_
 
 ---
 
-## 15. Xử lý sự cố thường gặp
+## 16. Xử lý sự cố thường gặp
 
 | Triệu chứng | Nguyên nhân thường gặp | Cách xử lý |
 |---|---|---|
@@ -361,7 +400,7 @@ Vì dùng **persistent job store**, các hàm được lên lịch (`send_water_
 
 ---
 
-## 16. Lịch sử phát triển (Changelog)
+## 17. Lịch sử phát triển (Changelog)
 
 ### v1.0 — MVP (30/07/2026)
 Nhắc theo giờ cố định, nút ✅/⏳, 1 người dùng cố định.
@@ -396,9 +435,15 @@ Toàn bộ phép tính ngày/giờ chuyển sang tính dựa trên UTC+7, không
 - Thêm lời nhắn dành riêng cho Khánh Đan vào đầu `README.md` và `DOCUMENTATION.md`
 - Bắt đầu áp dụng quy ước ghi ngày tháng cho mọi entry trong Changelog từ nay về sau
 
+### v2.2 — Trò chuyện qua @mention, Giai đoạn A (02/08/2026)
+- Thêm file `chat.py` riêng, xử lý trò chuyện qua @mention: đọc lịch sử chat (riêng theo người, `chat_history` table mới) + số liệu uống nước thật, gọi Gemini trả lời có ngữ cảnh
+- Bật `message_content` intent (cần bật thêm trên Discord Developer Portal)
+- System prompt tùy chỉnh qua biến `PROMPT_CHAT`, giới hạn lịch sử qua `CHAT_HISTORY_LIMIT` (mặc định 20)
+- **Phạm vi hiện tại**: chỉ trò chuyện/tư vấn/insight, chưa tự thực thi hành động - dự kiến Giai đoạn B (log nước qua chat) và Giai đoạn C (đăng ký/hủy qua chat, có xác nhận) ở các bản sau
+
 ---
 
-## 17. Hướng phát triển tiếp theo
+## 18. Hướng phát triển tiếp theo
 
 - **Mục tiêu số ly/ngày**: tự đặt mục tiêu, xem % hoàn thành
 - **Mood check-in đầy đủ**: bảng `mood_checkins` đã có schema, chưa có command
