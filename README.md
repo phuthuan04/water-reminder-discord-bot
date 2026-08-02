@@ -3,7 +3,11 @@
 Chatbot Discord nhắc uống nước, hỏi thăm sức khỏe, theo dõi streak, gửi fact vui, và hỗ trợ nhiều người dùng chung 1 bot.
 
 > 💌 **Chatbot này dành cho Khánh Đan, người yêu của anh.**
-> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé. Anh yêu em.
+>
+> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé. 
+>
+> Anh yêu em.
+>
 > — *phuthuan04*
 
 ## 📁 Cấu trúc project
@@ -59,11 +63,13 @@ python bot.py
 
 Thấy log `Bot đã sẵn sàng: <tên bot>#xxxx` là thành công. Bot chưa nhắc ai cả cho tới khi có người gõ `/dangky`.
 
-## 💬 Trò chuyện với bot (Giai đoạn A)
+## 💬 Trò chuyện với bot
 
 Tag `@Tên bot` kèm tin nhắn trong kênh để trò chuyện trực tiếp — bot sẽ đọc lịch sử chat gần đây (giữ riêng theo từng người) + dữ liệu uống nước thật (hôm nay, streak, 7 ngày) để trả lời có ngữ cảnh, đưa insight.
 
-**Lưu ý**: Giai đoạn A hiện chỉ trò chuyện/tư vấn, **chưa** tự thực hiện hành động (VD ghi nhận uống nước qua chat) — phần đó sẽ có ở giai đoạn sau. Cần bật thêm quyền **Message Content Intent** trong Discord Developer Portal (xem `DOCUMENTATION.md` mục Trò chuyện qua @mention).
+**Bot có thể tự ghi nhận uống nước qua chat** — chỉ cần nói kiểu "tôi vừa uống nước xong" là bot tự động log, không cần gõ `/uong` hay bấm nút.
+
+Cần bật thêm quyền **Message Content Intent** trong Discord Developer Portal (xem `DOCUMENTATION.md` mục Trò chuyện qua @mention).
 
 ## 🎮 Danh sách lệnh (tóm tắt — xem đầy đủ trong DOCUMENTATION.md)
 

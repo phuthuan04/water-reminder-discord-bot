@@ -9,7 +9,11 @@
 ---
 
 > 💌 **Chatbot này dành cho Khánh Đan, người yêu của anh.**
-> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé. Anh yêu em.
+>
+> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé. 
+>
+>Anh yêu em.
+>
 > — *phuthuan04*
 
 ---
@@ -274,7 +278,19 @@ Lấy API key miễn phí tại: https://aistudio.google.com/app/apikey
 
 Tag `@Tên bot` kèm nội dung trong bất kỳ kênh nào bot có mặt → bot đọc lịch sử chat gần đây (riêng theo từng người, không lẫn giữa nhiều người) + dữ liệu uống nước thật của người đó → gọi Gemini trả lời có ngữ cảnh.
 
-**Phạm vi Giai đoạn A**: chỉ trò chuyện, tư vấn, đưa insight dựa trên dữ liệu thật. **Chưa** tự thực thi hành động (VD ghi nhận uống nước qua chat) — dự kiến bổ sung ở Giai đoạn B (log nước) và Giai đoạn C (đăng ký/hủy, có xác nhận), dùng cơ chế function calling của Gemini.
+**Giai đoạn A** (trò chuyện + insight) và **Giai đoạn B** (tự thực thi hành động an toàn) đã hoàn thành. **Giai đoạn C** (đăng ký/hủy qua chat, có xác nhận) dự kiến bổ sung sau.
+
+### Function calling (Giai đoạn B)
+
+Bot dùng cơ chế **function calling** của Gemini để tự quyết định khi nào cần thực thi hành động thay vì chỉ trả lời chữ. Hiện có 1 hàm được khai báo cho Gemini:
+
+| Hàm | Khi nào Gemini gọi | Hành động thực tế |
+|---|---|---|
+| `ghi_nhan_uong_nuoc` | Người dùng xác nhận VỪA/ĐÃ uống nước xong | Gọi `db.log_water(user_id)`, trả kết quả về cho Gemini xác nhận lại bằng lời tự nhiên |
+
+**Luồng xử lý 2 lượt gọi API**: (1) gửi tin nhắn + khai báo hàm cho Gemini → nếu Gemini quyết định cần gọi hàm, sẽ trả về `function_call` thay vì text → (2) bot tự thực thi hàm Python tương ứng, gửi kết quả về lại cho Gemini → Gemini trả lời cuối cùng bằng ngôn ngữ tự nhiên dựa trên kết quả đó.
+
+**Nguyên tắc an toàn đã áp dụng**: `ghi_nhan_uong_nuoc` là hành động **an toàn, dễ nhận ra nếu sai** (chỉ cộng thêm 1 log, không xóa/thay đổi gì) nên bot **thực thi ngay** khi Gemini quyết định gọi, không cần hỏi xác nhận lại - đúng theo phân loại rủi ro đã thống nhất trước khi code (xem Changelog v2.2/v2.3). Các hành động nhạy cảm hơn (đăng ký/hủy) sẽ cần bước xác nhận, để dành cho Giai đoạn C.
 
 ### Yêu cầu cấu hình bắt buộc
 
@@ -440,6 +456,12 @@ Toàn bộ phép tính ngày/giờ chuyển sang tính dựa trên UTC+7, không
 - Bật `message_content` intent (cần bật thêm trên Discord Developer Portal)
 - System prompt tùy chỉnh qua biến `PROMPT_CHAT`, giới hạn lịch sử qua `CHAT_HISTORY_LIMIT` (mặc định 20)
 - **Phạm vi hiện tại**: chỉ trò chuyện/tư vấn/insight, chưa tự thực thi hành động - dự kiến Giai đoạn B (log nước qua chat) và Giai đoạn C (đăng ký/hủy qua chat, có xác nhận) ở các bản sau
+
+### v2.3 — Trò chuyện qua @mention, Giai đoạn B (02/08/2026)
+- Thêm **function calling**: bot tự ghi nhận uống nước (`ghi_nhan_uong_nuoc`) khi người dùng xác nhận qua chat, không cần gõ `/uong` hay bấm nút
+- Luồng xử lý 2 lượt gọi Gemini API: phát hiện function call → thực thi hàm Python thật → gửi kết quả lại cho Gemini → nhận câu trả lời tự nhiên cuối cùng
+- Hành động này được thực thi ngay (không cần xác nhận) vì được đánh giá an toàn, dễ nhận ra nếu sai
+- Cập nhật system prompt (`PROMPT_CHAT` mặc định) mô tả khả năng mới cho Gemini biết
 
 ---
 
