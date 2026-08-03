@@ -73,6 +73,17 @@ class ChatHistory(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
 
 
+class BotSetting(Base):
+    """
+    Cài đặt dạng key-value đơn giản, bền vững qua restart (khác với các cài đặt tạm
+    trong RAM như cooldown timer - cái đó không cần bền vững, mất thì tự tính lại).
+    """
+    __tablename__ = "bot_settings"
+
+    key = Column(String, primary_key=True)
+    value = Column(String, nullable=True)
+
+
 def init_db():
     """Tạo bảng nếu chưa tồn tại. Gọi 1 lần khi bot khởi động."""
     Base.metadata.create_all(engine)
@@ -367,5 +378,32 @@ def get_chat_history(user_id: str, limit: int = 20) -> list:
         )
         rows.reverse()
         return [(r.role, r.content) for r in rows]
+    finally:
+        session.close()
+
+
+# ---------- Cài đặt dạng key-value (bot_settings) ----------
+
+def get_setting(key: str, default: str = None) -> str:
+    """Đọc 1 giá trị cài đặt, trả về default nếu chưa từng được set."""
+    session = SessionLocal()
+    try:
+        row = session.query(BotSetting).filter(BotSetting.key == key).first()
+        return row.value if row else default
+    finally:
+        session.close()
+
+
+def set_setting(key: str, value: str):
+    """Ghi/đổi 1 giá trị cài đặt."""
+    session = SessionLocal()
+    try:
+        row = session.query(BotSetting).filter(BotSetting.key == key).first()
+        if row is None:
+            row = BotSetting(key=key, value=value)
+            session.add(row)
+        else:
+            row.value = value
+        session.commit()
     finally:
         session.close()

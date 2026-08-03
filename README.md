@@ -2,13 +2,10 @@
 
 Chatbot Discord nhắc uống nước, hỏi thăm sức khỏe, theo dõi streak, gửi fact vui, và hỗ trợ nhiều người dùng chung 1 bot.
 
-> 💌 **Chatbot này dành cho Khánh Đan, người yêu của anh.**
->
-> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé. 
->
+> 💌 Chatbot này dành cho Khánh Đan, người yêu của anh.
+> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé.
 > Anh yêu em.
->
-> — *phuthuan04*
+> — phuthuan04
 
 ## 📁 Cấu trúc project
 
@@ -65,9 +62,11 @@ Thấy log `Bot đã sẵn sàng: <tên bot>#xxxx` là thành công. Bot chưa n
 
 ## 💬 Trò chuyện với bot
 
-Tag `@Tên bot` kèm tin nhắn trong kênh để trò chuyện trực tiếp — bot sẽ đọc lịch sử chat gần đây (giữ riêng theo từng người) + dữ liệu uống nước thật (hôm nay, streak, 7 ngày) để trả lời có ngữ cảnh, đưa insight.
+Tag `@Tên bot` kèm tin nhắn trong kênh để trò chuyện trực tiếp — bot sẽ đọc lịch sử chat gần đây (giữ riêng theo từng người) + dữ liệu uống nước thật (hôm nay, streak, 7 ngày) để trả lời có ngữ cảnh, đưa insight, nói chuyện tự nhiên như bạn bè (không giới hạn chỉ chủ đề uống nước).
 
 **Bot có thể tự ghi nhận uống nước qua chat** — chỉ cần nói kiểu "tôi vừa uống nước xong" là bot tự động log, không cần gõ `/uong` hay bấm nút.
+
+**Chế độ tự do góp lời**: gõ `/tudo` (Bật/Tắt) để cho phép bot tự chủ động tham gia trò chuyện trong kênh mà không cần @mention — bot sẽ tự cân nhắc lúc nào nên góp lời, tối đa 1 lần mỗi `FREECHAT_COOLDOWN_MINUTES` phút (mặc định 5).
 
 Cần bật thêm quyền **Message Content Intent** trong Discord Developer Portal (xem `DOCUMENTATION.md` mục Trò chuyện qua @mention).
 

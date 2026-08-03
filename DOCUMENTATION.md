@@ -4,17 +4,14 @@
 **Ngôn ngữ:** Python 3.11
 **Trạng thái:** Đang vận hành (Production)
 **Nền tảng deploy:** Railway
-**Cập nhật lần cuối:** 02/08/2026 (xem chi tiết từng thay đổi tại [mục 17 - Changelog](#17-lịch-sử-phát-triển-changelog))
+**Cập nhật lần cuối:** 02/08/2026 (chế độ Tự do góp lời) (xem chi tiết từng thay đổi tại [mục 17 - Changelog](#17-lịch-sử-phát-triển-changelog))
 
 ---
 
-> 💌 **Chatbot này dành cho Khánh Đan, người yêu của anh.**
->
-> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé. 
->
->Anh yêu em.
->
-> — *phuthuan04*
+> 💌 Chatbot này dành cho Khánh Đan, người yêu của anh.
+> Mong rằng nó sẽ phần nào nhắc nhở em uống nước đầy đủ hơn. Phải luôn giữ gìn sức khỏe đấy nhé.
+> Anh yêu em.
+> — phuthuan04
 
 ---
 
@@ -30,7 +27,7 @@
 8. [Chu kỳ nhắc nhở (Reminder Cycle)](#8-chu-kỳ-nhắc-nhở-reminder-cycle)
 9. [Tin nhắn tùy chỉnh (Custom Messages)](#9-tin-nhắn-tùy-chỉnh-custom-messages)
 10. [Fun Facts qua Gemini API](#10-fun-facts-qua-gemini-api)
-11. [Trò chuyện qua @mention (Giai đoạn A)](#11-trò-chuyện-qua-mention-giai-đoạn-a)
+11. [Trò chuyện với bot](#11-trò-chuyện-với-bot)
 12. [Biến môi trường](#12-biến-môi-trường)
 13. [Hướng dẫn cài đặt & chạy local](#13-hướng-dẫn-cài-đặt--chạy-local)
 14. [Hướng dẫn deploy lên Railway](#14-hướng-dẫn-deploy-lên-railway)
@@ -171,6 +168,14 @@ Engine: SQLite, đường dẫn qua `DATABASE_PATH`. Dùng chung file với **AP
 | `content` | String | Nội dung tin nhắn gốc (không kèm data context được chèn lúc gọi API) |
 | `timestamp` | DateTime | UTC |
 
+### `bot_settings`
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| `key` | String (PK) | VD: `freechat_enabled` |
+| `value` | String, nullable | VD: `"1"` / `"0"` |
+
+Bảng key-value đơn giản, dùng cho các cài đặt **có chủ đích** của người dùng, cần bền vững qua restart (khác với cooldown timer - cái đó chỉ cần RAM, mất thì tự tính lại, không nghiêm trọng).
+
 ### Quy ước về thời gian
 
 Toàn bộ timestamp lưu **UTC**. Mọi phép tính "hôm nay" (streak, thống kê, log hiển thị, lịch nhắc) đều quy đổi qua hàm nội bộ `_vn_now()`/`_vn_today()` (database.py) và `vn_now()` (bot.py) — dựa trên `datetime.utcnow() + 7 giờ`, **không** dùng `datetime.now()`/`date.today()` trực tiếp vì phụ thuộc múi giờ hệ điều hành server.
@@ -189,6 +194,7 @@ Toàn bộ timestamp lưu **UTC**. Mọi phép tính "hôm nay" (streak, thống
 | `/thongke` | Mọi người | Biểu đồ 7 ngày gần nhất |
 | `/xuatdata` | Mọi người | Xuất CSV (`water_logs.csv`, `users.csv`) |
 | `/huongdan` | Mọi người | Đăng hướng dẫn sử dụng vào kênh hiện tại |
+| `/tudo` | Mọi người | Bật/tắt chế độ bot tự do góp lời trong kênh (không cần @mention) |
 | `/test` | Mọi người | [Debug] Gửi thử reminder ngay lập tức |
 | `/testfact` | Mọi người | [Debug] Gửi thử 1 fact ngay lập tức |
 | `/thongbao` | **Admin** | Đăng thông báo cập nhật, tự tag người đã đăng ký |
@@ -272,13 +278,15 @@ Lấy API key miễn phí tại: https://aistudio.google.com/app/apikey
 
 ---
 
-## 11. Trò chuyện qua @mention (Giai đoạn A)
+## 11. Trò chuyện với bot
 
 ### Cách hoạt động
 
 Tag `@Tên bot` kèm nội dung trong bất kỳ kênh nào bot có mặt → bot đọc lịch sử chat gần đây (riêng theo từng người, không lẫn giữa nhiều người) + dữ liệu uống nước thật của người đó → gọi Gemini trả lời có ngữ cảnh.
 
-**Giai đoạn A** (trò chuyện + insight) và **Giai đoạn B** (tự thực thi hành động an toàn) đã hoàn thành. **Giai đoạn C** (đăng ký/hủy qua chat, có xác nhận) dự kiến bổ sung sau.
+**Giai đoạn A** (trò chuyện + insight), **Giai đoạn B** (tự thực thi hành động an toàn), và **chế độ Tự do góp lời** (xem bên dưới) đã hoàn thành.
+
+> **Lưu ý lịch sử thiết kế**: kế hoạch ban đầu có "Giai đoạn C" (đăng ký/hủy qua chat, có xác nhận), nhưng sau khi cân nhắc, thấy không mang lại nhiều giá trị thực tế bằng việc làm bot trò chuyện tự nhiên hơn — nên đã **thay thế** bằng chế độ Tự do góp lời + nới lỏng chủ đề trò chuyện. Giai đoạn C (đăng ký/hủy qua chat) không còn nằm trong kế hoạch phát triển.
 
 ### Function calling (Giai đoạn B)
 
@@ -290,7 +298,20 @@ Bot dùng cơ chế **function calling** của Gemini để tự quyết định
 
 **Luồng xử lý 2 lượt gọi API**: (1) gửi tin nhắn + khai báo hàm cho Gemini → nếu Gemini quyết định cần gọi hàm, sẽ trả về `function_call` thay vì text → (2) bot tự thực thi hàm Python tương ứng, gửi kết quả về lại cho Gemini → Gemini trả lời cuối cùng bằng ngôn ngữ tự nhiên dựa trên kết quả đó.
 
-**Nguyên tắc an toàn đã áp dụng**: `ghi_nhan_uong_nuoc` là hành động **an toàn, dễ nhận ra nếu sai** (chỉ cộng thêm 1 log, không xóa/thay đổi gì) nên bot **thực thi ngay** khi Gemini quyết định gọi, không cần hỏi xác nhận lại - đúng theo phân loại rủi ro đã thống nhất trước khi code (xem Changelog v2.2/v2.3). Các hành động nhạy cảm hơn (đăng ký/hủy) sẽ cần bước xác nhận, để dành cho Giai đoạn C.
+**Nguyên tắc an toàn đã áp dụng**: `ghi_nhan_uong_nuoc` là hành động **an toàn, dễ nhận ra nếu sai** (chỉ cộng thêm 1 log, không xóa/thay đổi gì) nên bot **thực thi ngay** khi Gemini quyết định gọi, không cần hỏi xác nhận lại.
+
+### Chế độ Tự do góp lời (không cần @mention)
+
+Ngoài trả lời khi được @mention, bot có thể **chủ động tham gia** cuộc trò chuyện trong kênh — bật/tắt qua lệnh `/tudo` (dropdown Bật/Tắt). Cố tình dùng slash command thay vì để AI hiểu qua chat tự nhiên để bật/tắt, nhằm đảm bảo chắc chắn 100%, tránh trường hợp AI hiểu nhầm ý định.
+
+**Cơ chế lọc trước khi gọi Gemini** (tiết kiệm chi phí + tránh bot nói quá nhiều):
+1. Chế độ phải đang **bật** (lưu trong bảng `bot_settings`, bền vững qua restart)
+2. Tin nhắn không quá ngắn (≥ 5 ký tự) và không bắt đầu bằng `!` hoặc `/`
+3. Đã đủ **thời gian nghỉ tối thiểu** kể từ lần bot góp lời gần nhất (`FREECHAT_COOLDOWN_MINUTES`, mặc định 5 phút - theo dõi trong RAM, không cần bền vững vì mất đi cũng không nghiêm trọng)
+
+Nếu qua được bộ lọc, bot gọi Gemini kèm 1 chỉ dẫn đặc biệt: *"đây là tin nhắn không trực tiếp nhắn cho bạn, chỉ góp lời nếu thực sự đáng nói"* — Gemini có thể chọn trả về 1 token đặc biệt (`SKIP_TOKEN`) để báo hiệu im lặng. Khi đó bot không gửi gì cả và **cũng không lưu lượt đó vào lịch sử** (tránh làm rối ngữ cảnh với các lượt "im lặng").
+
+**Chủ đề trò chuyện đã được nới lỏng**: bot không còn bị ép lái mọi cuộc trò chuyện về chủ đề uống nước, có thể tán gẫu tự nhiên như 1 người bạn, chỉ vẫn ưu tiên dùng đúng số liệu thật khi có liên quan tới sức khỏe/uống nước.
 
 ### Yêu cầu cấu hình bắt buộc
 
@@ -302,17 +323,19 @@ Thiếu bước 1 (bật trên Developer Portal) sẽ khiến bot không nhận 
 
 ### Kiến trúc
 
-File `chat.py` (mới, tách riêng khỏi `bot.py`) đảm nhiệm: xây dựng ngữ cảnh (ghép lịch sử chat + số liệu uống nước thật), gọi Gemini, lưu lại lịch sử mới vào bảng `chat_history`. `bot.py` chỉ lo phần orchestration (bắt sự kiện `on_message`, kiểm tra có bị @mention không, gọi `chat.get_chat_response()`, gửi phản hồi).
+File `chat.py` (tách riêng khỏi `bot.py`) đảm nhiệm: xây dựng ngữ cảnh (ghép lịch sử chat + số liệu uống nước thật), gọi Gemini (kèm function calling khi cần), lưu lại lịch sử mới vào bảng `chat_history`. Logic gọi Gemini dùng chung giữa 2 chế độ (@mention và tự do góp lời) qua hàm nội bộ `_generate_reply()`, chỉ khác nhau ở: có luôn bắt buộc trả lời hay không, và có lưu lịch sử khi "im lặng" hay không.
+
+`bot.py` chỉ lo phần orchestration (bắt sự kiện `on_message`, phân biệt @mention hay tự do, áp bộ lọc cooldown, gọi hàm tương ứng trong `chat.py`, gửi phản hồi).
 
 **Ngữ cảnh gửi cho Gemini mỗi lượt** gồm:
 - Lịch sử tối đa `CHAT_HISTORY_LIMIT` tin gần nhất (mặc định 20), lưu riêng theo `user_id`
 - Số liệu thật: số lần uống nước hôm nay, streak, thống kê 7 ngày — chèn kèm ngay trước tin nhắn của người dùng ở mỗi lượt, để Gemini luôn có số liệu mới nhất mà không cần lưu lặp lại trong lịch sử
 
-**Cơ chế an toàn**: giống các tính năng Gemini khác trong bot (facts), mọi lỗi (chưa cấu hình key, sai key, mất mạng, lỗi API,...) đều được bắt gọn, trả về 1 câu xin lỗi thân thiện thay vì crash. Khi lỗi xảy ra, tin nhắn KHÔNG được lưu vào lịch sử (tránh lưu rác/lặp lại lỗi ở lượt sau).
+**Cơ chế an toàn**: giống các tính năng Gemini khác trong bot (facts), mọi lỗi (chưa cấu hình key, sai key, mất mạng, lỗi API,...) đều được bắt gọn, trả về 1 câu xin lỗi thân thiện (chế độ @mention) hoặc im lặng (chế độ tự do) thay vì crash. Khi lỗi xảy ra, tin nhắn KHÔNG được lưu vào lịch sử.
 
 ### Tùy chỉnh system prompt
 
-Biến `PROMPT_CHAT` (giống cách `PROMPT_FACT` hoạt động) — để trống thì dùng prompt mặc định viết sẵn trong `chat.py` (định nghĩa tính cách, giới hạn phạm vi trả lời, quy tắc dùng số liệu thật). Đổi trực tiếp trên Railway, không cần sửa code.
+Biến `PROMPT_CHAT` (giống cách `PROMPT_FACT` hoạt động) — để trống thì dùng prompt mặc định viết sẵn trong `chat.py` (định nghĩa tính cách, quy tắc dùng số liệu thật, mô tả khả năng gọi hàm). Đổi trực tiếp trên Railway, không cần sửa code.
 
 ---
 
@@ -334,6 +357,7 @@ Biến `PROMPT_CHAT` (giống cách `PROMPT_FACT` hoạt động) — để tr�
 | `PROMPT_FACT` | ❌ | (prompt mặc định trong code) | Prompt gửi cho Gemini - đổi trực tiếp trên Railway, không cần sửa code/deploy lại |
 | `CHAT_HISTORY_LIMIT` | ❌ | `20` | Số tin nhắn gần nhất giữ làm ngữ cảnh trò chuyện, mỗi người riêng |
 | `PROMPT_CHAT` | ❌ | (prompt mặc định trong `chat.py`) | System prompt cho tính năng trò chuyện @mention |
+| `FREECHAT_COOLDOWN_MINUTES` | ❌ | `5` | Khoảng nghỉ tối thiểu giữa các lần bot tự do góp lời (chế độ `/tudo`) |
 | `TIMEZONE` | ❌ | `Asia/Ho_Chi_Minh` | Timezone cho scheduler |
 | `DATABASE_PATH` | ❌ | `water_reminder.db` | Đường dẫn DB. Production trỏ Volume, VD `/data/water_reminder.db` |
 
@@ -462,6 +486,13 @@ Toàn bộ phép tính ngày/giờ chuyển sang tính dựa trên UTC+7, không
 - Luồng xử lý 2 lượt gọi Gemini API: phát hiện function call → thực thi hàm Python thật → gửi kết quả lại cho Gemini → nhận câu trả lời tự nhiên cuối cùng
 - Hành động này được thực thi ngay (không cần xác nhận) vì được đánh giá an toàn, dễ nhận ra nếu sai
 - Cập nhật system prompt (`PROMPT_CHAT` mặc định) mô tả khả năng mới cho Gemini biết
+
+### v2.4 — Chế độ Tự do góp lời, thay thế kế hoạch Giai đoạn C (02/08/2026)
+- **Hủy kế hoạch Giai đoạn C** (đăng ký/hủy qua chat) sau khi đánh giá lại không mang nhiều giá trị thực tế
+- Thêm lệnh `/tudo` (Bật/Tắt) — cho phép bot chủ động góp lời trong kênh mà không cần @mention, có cơ chế "nghỉ" tối thiểu (`FREECHAT_COOLDOWN_MINUTES`, mặc định 5 phút) để tránh chen ngang quá nhiều
+- Thêm bảng `bot_settings` (key-value) lưu trạng thái bật/tắt bền vững qua restart
+- **Nới lỏng system prompt**: bot không còn bị ép lái mọi cuộc trò chuyện về chủ đề uống nước, có thể tán gẫu tự nhiên như 1 người bạn
+- Tách logic gọi Gemini dùng chung (`_generate_reply()`) cho cả 2 chế độ (@mention và tự do), tránh trùng lặp code
 
 ---
 

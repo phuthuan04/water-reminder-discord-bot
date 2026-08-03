@@ -77,6 +77,10 @@ PROMPT_FACT = os.getenv("PROMPT_FACT") or (
     "Có thể thêm 1 emoji phù hợp. Chỉ trả về đúng câu fact, không thêm lời dẫn hay giải thích gì khác."
 )
 
+# Khoảng "nghỉ" tối thiểu (phút) giữa các lần bot tự do góp lời trong kênh (chế độ /tudo bật).
+# Tránh bot chen ngang liên tục, đồng thời tiết kiệm số lần gọi Gemini API.
+FREECHAT_COOLDOWN_MINUTES = int(os.getenv("FREECHAT_COOLDOWN_MINUTES", "5"))
+
 # Danh sách Discord user ID được coi là admin (cách nhau bởi dấu phẩy).
 # Đây là cơ chế phân quyền RIÊNG của bot, không dùng quyền "Administrator" của Discord server,
 # nên 1 người có thể vừa là admin (theo bot) vừa dùng bot như user bình thường mà không xung đột,
@@ -122,6 +126,21 @@ def is_quiet_hours() -> bool:
     """Từ QUIET_HOUR (mặc định 22:30) trở đi, không gửi thêm bất kỳ nhắc nhở nào nữa."""
     now = vn_now()
     return (now.hour, now.minute) >= QUIET_HOUR_TUPLE
+
+
+# Thời điểm bot tự do góp lời gần nhất - chỉ cần lưu RAM (không cần bền vững qua restart,
+# mất thì tự tính lại, không ảnh hưởng gì nghiêm trọng - khác với is_freechat_enabled
+# phải lưu DB vì đó là lựa chọn có chủ đích của người dùng).
+_last_freechat_reply_at = None
+
+
+def _freechat_cooldown_ok() -> bool:
+    """Kiểm tra đã đủ FREECHAT_COOLDOWN_MINUTES kể từ lần bot tự do góp lời gần nhất chưa."""
+    global _last_freechat_reply_at
+    if _last_freechat_reply_at is None:
+        return True
+    elapsed = vn_now() - _last_freechat_reply_at
+    return elapsed >= timedelta(minutes=FREECHAT_COOLDOWN_MINUTES)
 
 
 # ---------- Giao diện nút bấm (View) ----------
@@ -412,6 +431,18 @@ async def on_message(message: discord.Message):
                 reply = await chat.get_chat_response(str(message.author.id), content)
             await message.reply(reply[:2000])  # Discord giới hạn 2000 ký tự/tin nhắn
 
+    elif message.content.strip() and not message.content.startswith(("!", "/")):
+        # Chế độ TỰ DO góp lời - chỉ xét khi: đã bật /tudo, đủ thời gian "nghỉ",
+        # và tin nhắn không quá ngắn/vô nghĩa (lọc sơ bộ trước khi tốn API call).
+        global _last_freechat_reply_at
+        freechat_enabled = db.get_setting("freechat_enabled", "0") == "1"
+
+        if freechat_enabled and _freechat_cooldown_ok() and len(message.content.strip()) >= 5:
+            reply = await chat.maybe_join_conversation(str(message.author.id), message.content.strip())
+            if reply:
+                _last_freechat_reply_at = vn_now()
+                await message.reply(reply[:2000])
+
     # Bắt buộc phải gọi dòng này khi đã tự định nghĩa on_message,
     # nếu không các lệnh dùng prefix "!" (nếu có) sẽ ngừng hoạt động.
     await bot.process_commands(message)
@@ -575,6 +606,25 @@ async def thongke(interaction: discord.Interaction):
         content=f"📈 Trung bình **{avg:.1f} lần/ngày** trong 7 ngày qua.",
         file=file,
     )
+
+
+@bot.tree.command(name="tudo", description="Bật/tắt chế độ bot tự do góp lời trong kênh (không cần @mention)")
+@app_commands.describe(trang_thai="Bật hay tắt")
+@app_commands.choices(trang_thai=[
+    app_commands.Choice(name="Bật", value="1"),
+    app_commands.Choice(name="Tắt", value="0"),
+])
+async def tudo(interaction: discord.Interaction, trang_thai: app_commands.Choice[str]):
+    db.set_setting("freechat_enabled", trang_thai.value)
+    if trang_thai.value == "1":
+        await interaction.response.send_message(
+            f"🗣️ Đã bật chế độ tự do góp lời! Mình sẽ thỉnh thoảng góp lời trong kênh "
+            f"(tối đa 1 lần mỗi {FREECHAT_COOLDOWN_MINUTES} phút) mà không cần @mention nữa."
+        )
+    else:
+        await interaction.response.send_message(
+            "🤐 Đã tắt chế độ tự do góp lời. Mình sẽ chỉ trả lời khi được @mention thôi."
+        )
 
 
 @bot.tree.command(name="huongdan", description="Đăng hướng dẫn sử dụng bot vào kênh này")
