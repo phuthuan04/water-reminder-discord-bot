@@ -4,7 +4,7 @@
 **Ngôn ngữ:** Python 3.11
 **Trạng thái:** Đang vận hành (Production)
 **Nền tảng deploy:** Railway
-**Cập nhật lần cuối:** 02/08/2026 (chế độ Tự do góp lời) (xem chi tiết từng thay đổi tại [mục 17 - Changelog](#17-lịch-sử-phát-triển-changelog))
+**Cập nhật lần cuối:** 03/08/2026 (sửa lỗi lệch múi giờ lịch nhắc định kỳ) (xem chi tiết từng thay đổi tại [mục 17 - Changelog](#17-lịch-sử-phát-triển-changelog))
 
 ---
 
@@ -437,6 +437,8 @@ Vì dùng **persistent job store**, các hàm được lên lịch (`send_water_
 | `/thongbao`, `/themtinnhan`,... báo "chỉ dành cho admin" dù đúng là admin | `ADMIN_USER_IDS` chưa khai báo trên Railway, hoặc sai ID | Kiểm tra tab Variables, đối chiếu đúng User ID |
 | Fact luôn chỉ ra 1 trong 8 câu cũ, không đổi mới | Gemini API lỗi hoặc chưa cấu hình key | Xem log tìm dòng `Gọi Gemini API lỗi...`, kiểm tra `GEMINI_API_KEY` |
 | Bot vẫn nhắc sau giờ đã đặt `QUIET_HOUR` | Biến chưa được thêm trên Railway (đang dùng mặc định 22:30) | Kiểm tra tab Variables |
+| Lịch nhắc định kỳ (`REMINDER_TIMES`/`FACTS_TIMES`) chạy lệch hẳn múi giờ sau khi bot restart (VD nhắc lúc 01:00 sáng thay vì 18:00 tối) | Job cron nạp lại từ persistent job store bị mất thông tin múi giờ đã gán | Đã sửa (xem Changelog v2.5) - khai báo `timezone=` trực tiếp vào từng `CronTrigger` thay vì chỉ dựa vào cấu hình chung của scheduler |
+| 1 mốc giờ trong `REMINDER_TIMES`/`FACTS_TIMES` bị "biến mất" không rõ lý do | Gõ nhầm dấu `;` thay vì `,` giữa các mốc giờ | Kiểm tra kỹ dấu phân cách trên Railway, phải là dấu phẩy `,` |
 
 ---
 
@@ -493,6 +495,12 @@ Toàn bộ phép tính ngày/giờ chuyển sang tính dựa trên UTC+7, không
 - Thêm bảng `bot_settings` (key-value) lưu trạng thái bật/tắt bền vững qua restart
 - **Nới lỏng system prompt**: bot không còn bị ép lái mọi cuộc trò chuyện về chủ đề uống nước, có thể tán gẫu tự nhiên như 1 người bạn
 - Tách logic gọi Gemini dùng chung (`_generate_reply()`) cho cả 2 chế độ (@mention và tự do), tránh trùng lặp code
+
+### v2.5 — Sửa lỗi nghiêm trọng: lịch nhắc định kỳ bị lệch múi giờ sau restart (03/08/2026)
+- **Phát hiện qua log thực tế production**: job cron (`REMINDER_TIMES`, `FACTS_TIMES`) sau khi bot restart bị nạp lại từ persistent job store nhưng mất thông tin múi giờ đã gán, khiến giờ nhắc bị hiểu nhầm thành UTC thay vì giờ VN (VD: cấu hình 18:00 lại chạy lúc 01:00 sáng)
+- Sửa bằng cách khai báo `timezone=TIMEZONE` **trực tiếp vào từng `CronTrigger`** thay vì chỉ dựa vào cấu hình chung của scheduler — không còn phụ thuộc vào việc thông tin múi giờ có được giữ nguyên qua các lần nạp lại từ database hay không
+- Các job "1 lần" (chuỗi nhắc lại `check_no_response`/`check_drink_confirm`, dùng `date` trigger) không bị ảnh hưởng bởi lỗi này, chỉ job cron lặp lại định kỳ mới gặp vấn đề
+- Phát hiện thêm: gõ nhầm dấu `;` thay vì `,` trong `REMINDER_TIMES` sẽ khiến 1 mốc giờ bị âm thầm bỏ qua (chỉ log warning, không lỗi rõ ràng) - đã thêm ghi chú cảnh báo vào bảng troubleshooting
 
 ---
 

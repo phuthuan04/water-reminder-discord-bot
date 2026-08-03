@@ -389,7 +389,11 @@ def setup_scheduler():
 
         scheduler.add_job(
             send_water_reminder,
-            trigger=CronTrigger(hour=hour, minute=minute),
+            # Khai báo timezone TRỰC TIẾP vào trigger (không chỉ dựa vào timezone
+            # chung của scheduler) - vì đã phát hiện: sau khi bot restart, job cron
+            # nạp lại từ persistent job store có thể bị mất thông tin múi giờ đã gán,
+            # khiến giờ nhắc bị hiểu nhầm thành UTC thay vì giờ VN.
+            trigger=CronTrigger(hour=hour, minute=minute, timezone=TIMEZONE),
             id=f"reminder_{time_str}",
             replace_existing=True,
         )
@@ -404,7 +408,7 @@ def setup_scheduler():
 
         scheduler.add_job(
             send_water_fact,
-            trigger=CronTrigger(hour=hour, minute=minute),
+            trigger=CronTrigger(hour=hour, minute=minute, timezone=TIMEZONE),
             id=f"fact_{time_str}",
             replace_existing=True,
         )
