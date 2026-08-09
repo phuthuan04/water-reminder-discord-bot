@@ -109,6 +109,7 @@ async def _generate_reply(user_id: str, user_message: str, extra_instruction: st
     KHÔNG tự lưu lịch sử ở đây - để hàm gọi nó (get_chat_response / maybe_join_conversation)
     tự quyết định có lưu hay không, vì chế độ tự do góp lời không muốn lưu các lượt "im lặng".
     """
+    
     from google import genai
     from google.genai import types
 

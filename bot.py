@@ -355,7 +355,7 @@ async def generate_fact_via_gemini():
         )
         text = (response.text or "").strip()
         return text if text else None
-    except Exception as e:
+    except Exception as e: 
         log.warning("Gọi Gemini API lỗi, sẽ dùng fact dự phòng: %s", e)
         return None
 
@@ -534,8 +534,22 @@ async def test_reminder(interaction: discord.Interaction):
 
 @bot.tree.command(name="testfact", description="[Test] Gửi thử 1 fact vui về uống nước ngay lập tức")
 async def testfact(interaction: discord.Interaction):
-    await interaction.response.send_message("Đang gửi thử fact... ⏳", ephemeral=True)
-    await send_water_fact()
+    """
+    Lệnh test gửi fact trực tiếp vào kênh và cập nhật trạng thái cho Admin.
+    """
+    # 1. Báo trạng thái đang xử lý ngay lập tức
+    await interaction.response.send_message("⌛ Đang gọi Gemini API và gửi fact vào kênh...", ephemeral=True)
+
+    try:
+        # 2. Gọi hàm gửi fact vào channel cấu hình
+        await send_water_fact()
+        
+        # 3. Cập nhật lại tin nhắn phản hồi báo thành công
+        await interaction.edit_original_response(content="✅ Đã gửi thử fact vui về nước thành công!")
+        
+    except Exception as e:
+        log.error("Lỗi khi chạy testfact: %s", e)
+        await interaction.edit_original_response(content=f"❌ Gửi fact thất bại! Chi tiết lỗi: `{e}`")
 
 
 @bot.tree.command(name="xuatdata", description="Xuất toàn bộ dữ liệu thô ra file CSV")

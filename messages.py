@@ -18,7 +18,7 @@ REMINDER_MESSAGES = [
     "Nhắc nhẹ: 1 ly nước cho làn da đẹp và tinh thần sảng khoái nha 💦",
     "Đừng quên uống nước đó nha, đừng để tới lúc khát mới uống 😤",
     "Giờ vàng để uống nước đây! Làm 1 ly cho khỏe nào 💧",
-    "Người yêu bé nhỏ ơi, uống nước đi rồi mình hỏi thăm tiếp nè 🥰",
+    "Người yêu bé nhỏ ơi, uống nước đi rồi mình làm gì thì làm tiếp nè 🥰",
 ]
 
 # Câu hỏi thăm sức khỏe - chèn ngẫu nhiên xen kẽ để tạo cảm giác quan tâm thật
