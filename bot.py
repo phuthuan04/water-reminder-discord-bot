@@ -72,9 +72,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # Prompt dùng để yêu cầu Gemini sinh fact - có thể đổi trực tiếp trên Railway (tab Variables)
 # mà không cần sửa code/deploy lại.
 PROMPT_FACT = os.getenv("PROMPT_FACT") or (
-    "Viết đúng 1 câu fact ngắn gọn (dưới 40 từ), vui vẻ, bằng tiếng Việt, "
-    "về lợi ích hoặc điều thú vị/hài hước liên quan tới việc uống nước. "
-    "Có thể thêm 1 emoji phù hợp. Chỉ trả về đúng câu fact, không thêm lời dẫn hay giải thích gì khác."
+    "Viết đúng 1-2 câu fact ngắn gọn (khoảng 25-45 từ), vui vẻ, dễ đọc lướt, bằng tiếng Việt, "
+    "về 1 điều thú vị/hữu ích liên quan tới uống nước hoặc cơ thể con người. Có thể thêm 1 emoji "
+    "phù hợp ở đầu câu. Văn phong gần gũi, hài hước nhẹ, không hàn lâm, không liệt kê nguồn hay "
+    "cấu trúc nhiều mục. Chỉ trả về đúng câu fact, không thêm lời dẫn."
 )
 
 # Khoảng "nghỉ" tối thiểu (phút) giữa các lần bot tự do góp lời trong kênh (chế độ /tudo bật).
@@ -114,7 +115,7 @@ def vn_now() -> datetime:
     (Railway có thể chạy ở UTC hoặc múi giờ khác), trong khi datetime.utcnow()
     luôn cho giờ UTC chuẩn bất kể server đặt ở đâu.
     """
-    return datetime.utcnow() + timedelta(hours=7)
+    return datetime.utcnow() + timedelta(hours=int(os.getenv("TIMEZONE_OFFSET_HOURS", "7")))
 
 
 def is_admin(user_id) -> bool:
